@@ -1,6 +1,6 @@
-# RogaScan Documentation
+# SnapText Documentation
 
-Welcome to the RogaScan documentation. This documentation is designed to help both developers and AI agents understand the project architecture, API, and development workflow.
+Welcome to the SnapText documentation. This documentation is designed to help both developers and AI agents understand the project architecture, API, and development workflow.
 
 ## Project Status
 - **License**: MIT License (Free for education & research)
@@ -52,7 +52,7 @@ Welcome to the RogaScan documentation. This documentation is designed to help bo
 
 ### Project Structure
 ```
-rogascan/
+snaptext/
 ├── app/                    # Application source code
 │   ├── api/               # API endpoints
 │   ├── core/              # Configuration, exceptions, logging
@@ -79,7 +79,7 @@ rogascan/
 
 ## Open Source
 
-RogaScan is open-source under MIT License:
+SnapText is open-source under MIT License:
 - Free to use for education and research
 - Free to modify and extend
 - Free to distribute

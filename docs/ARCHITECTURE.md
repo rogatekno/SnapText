@@ -1,14 +1,14 @@
-# RogaScan Architecture
+# SnapText Architecture
 
-This document provides comprehensive context about the RogaScan system architecture for developers and AI agents.
+This document provides comprehensive context about the SnapText system architecture for developers and AI agents.
 
 ## Overview
 
-RogaScan is a FastAPI-based OCR (Optical Character Recognition) service built with the **Repository Pattern** for clean separation of concerns. The system uses PaddleOCR 2.10.0 with PaddlePaddle 2.6.2 as the text extraction engine and provides RESTful API endpoints for text extraction and visualization.
+SnapText is a FastAPI-based OCR (Optical Character Recognition) service built with the **Repository Pattern** for clean separation of concerns. The system uses PaddleOCR 2.10.0 with PaddlePaddle 2.6.2 as the text extraction engine and provides RESTful API endpoints for text extraction and visualization.
 
 ## Dependency Version Compatibility
 
-**IMPORTANT**: RogaScan uses specific versions for compatibility:
+**IMPORTANT**: SnapText uses specific versions for compatibility:
 - **PaddlePaddle 2.6.2** (NOT 3.x)
 - **PaddleOCR 2.10.0** (2.7.x - 2.10.x range)
 
@@ -72,7 +72,7 @@ The Repository Pattern abstracts data access logic, providing several benefits:
 ## Directory Structure and Purpose
 
 ```
-rogascan/
+snaptext/
 │
 ├── app/
 │   ├── __init__.py
@@ -219,7 +219,7 @@ class OCRRepositoryInterface(ABC):
 - Access via `get_settings()`
 
 #### exceptions.py
-- `RogaScanException` (base)
+- `SnapTextException` (base)
 - `ValidationError`, `OCRError`, `FileProcessingError`
 - Exception handlers for FastAPI
 
@@ -315,7 +315,7 @@ Client Response (PNG image)
 ```
 Exception
     │
-    ├── RogaScanException (base)
+    ├── SnapTextException (base)
     │    ├── ValidationError
     │    │    ├── ImageFormatError
     │    │    └── FileSizeError
@@ -345,7 +345,7 @@ All errors return consistent JSON:
 ### Exception Handlers
 
 Located in `app/core/exceptions.py`:
-- `rogascan_exception_handler` - Custom exceptions → 400
+- `snaptext_exception_handler` - Custom exceptions → 400
 - `http_exception_handler` - HTTPException → preserve status
 - `generic_exception_handler` - Unexpected → 500
 
@@ -357,7 +357,7 @@ Loaded from `.env` file (see `.env.example`):
 
 ```bash
 # Application
-APP_NAME=RogaScan
+APP_NAME=SnapText
 ENVIRONMENT=development
 DEBUG=true
 

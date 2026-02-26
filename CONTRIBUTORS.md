@@ -1,6 +1,6 @@
-# Contributors to RogaScan
+# Contributors to SnapText
 
-Thank you to all contributors who have helped make RogaScan better!
+Thank you to all contributors who have helped make SnapText better!
 
 ## Core Maintainer
 
@@ -48,4 +48,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute!
 
 ---
 
-**Developed by the RogaScan community**
+**Developed by the SnapText community**

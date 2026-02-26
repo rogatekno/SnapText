@@ -1,4 +1,4 @@
-"""Custom exceptions for RogaScan application.
+"""Custom exceptions for SnapText application.
 
 This module defines application-specific exceptions for better error handling
 and meaningful error responses to API clients.
@@ -12,8 +12,8 @@ from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 
 
-class RogaScanException(Exception):
-    """Base exception for all RogaScan errors."""
+class SnapTextException(Exception):
+    """Base exception for all SnapText errors."""
 
     def __init__(
         self,
@@ -34,7 +34,7 @@ class RogaScanException(Exception):
         super().__init__(self.message)
 
 
-class ValidationError(RogaScanException):
+class ValidationError(SnapTextException):
     """Raised when request validation fails."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
@@ -51,7 +51,7 @@ class ValidationError(RogaScanException):
         )
 
 
-class FileProcessingError(RogaScanException):
+class FileProcessingError(SnapTextException):
     """Raised when file processing fails."""
 
     def __init__(
@@ -77,7 +77,7 @@ class FileProcessingError(RogaScanException):
         )
 
 
-class OCRError(RogaScanException):
+class OCRError(SnapTextException):
     """Raised when OCR processing fails."""
 
     def __init__(
@@ -153,7 +153,7 @@ class FileSizeError(ValidationError):
         )
 
 
-class ModelLoadError(RogaScanException):
+class ModelLoadError(SnapTextException):
     """Raised when OCR model fails to load."""
 
     def __init__(
@@ -209,14 +209,14 @@ def create_http_exception(
 # Exception Handlers for FastAPI
 
 
-async def rogascan_exception_handler(
-    request: Any, exc: RogaScanException
+async def snaptext_exception_handler(
+    request: Any, exc: SnapTextException
 ) -> JSONResponse:
-    """Handle RogaScanException instances.
+    """Handle SnapTextException instances.
 
     Args:
         request: FastAPI request
-        exc: RogaScanException instance
+        exc: SnapTextException instance
 
     Returns:
         JSONResponse with error details

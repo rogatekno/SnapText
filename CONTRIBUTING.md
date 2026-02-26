@@ -1,6 +1,15 @@
-# Contributing to RogaScan
+# Contributing to SnapText
 
-Thank you for your interest in contributing to RogaScan! This project is designed for **education and research**, and we welcome contributions from the community to improve its quality and functionality.
+Thank you for your interest in contributing to SnapText! This project is designed for **education and research**, and we welcome contributions from the community to improve its quality and functionality.
+
+## Table of Contents
+
+- [How to Contribute](#how-to-contribute)
+- [Development Guidelines](#development-guidelines)
+- [Code of Conduct](#code-of-conduct)
+- [Getting Help](#getting-help)
+
+---
 
 ## How to Contribute
 
@@ -23,11 +32,11 @@ If you find a bug or have a suggestion:
 ```bash
 # Fork the repository on GitHub
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/rogascan.git
-cd rogascan
+git clone https://github.com/YOUR_USERNAME/snaptext.git
+cd snaptext
 
 # Add upstream
-git remote add upstream https://github.com/RogaTekno/rogascan.git
+git remote add upstream https://github.com/RogaTekno/snaptext.git
 ```
 
 #### Setup Development Environment
@@ -64,11 +73,11 @@ git checkout -b fix/bug-description
 
 #### Make Your Changes
 
-1. **Follow the existing architecture** - See [ARCHITECTURE.md](docs/ARCHITECTURE.md)
-2. **Add tests** for new features
-3. **Update documentation** if needed
-4. **Format code** with Black
-5. **Lint code** with Ruff
+1. Follow the existing architecture - See [ARCHITECTURE.md](docs/ARCHITECTURE.md)
+2. Add tests for new features
+3. Update documentation if needed
+4. Format code with Black
+5. Lint code with Ruff
 
 ```bash
 # Format code
@@ -97,6 +106,7 @@ refactor: simplify image validation
 ```
 
 Example:
+
 ```bash
 git add .
 git commit -m "feat: add watermark on OCR visualization"
@@ -117,24 +127,127 @@ In your PR description, explain:
 - Screenshots for UI changes
 - How to test your changes
 
-### 3. Areas That Need Contributions
+### 3. Opportunities for Contribution
 
-We are looking for contributions in:
+SnapText has solid generic OCR capabilities. Here are exciting opportunities to expand the project:
 
-- [ ] **Language Support**: Add OCR support for more languages
-- [ ] **Document Mapping**: Implement field extraction for KTP, KK, BPJS, etc.
-- [ ] **Batch Processing**: Endpoint for multiple files
-- [ ] **Caching**: Redis cache for OCR results
-- [ ] **Queue System**: Celery/Redis for async processing
-- [ ] **Docker**: Dockerfile and docker-compose for deployment
-- [ ] **Tests**: Additional test coverage
-- [ ] **Documentation**: Improvements and completions
-- [ ] **Performance**: Processing speed optimizations
-- [ ] **Mobile API**: Endpoints optimized for mobile apps
+#### Document-Specific Processors
 
-### 4. Development Guidelines
+Build intelligent extractors for specific document types:
 
-#### Code Style
+**Indonesian Documents** (High Priority):
+- **KTP (Kartu Tanda Penduduk)** - ID Card field extractor
+  - Extract: NIK, name, birth date/place, gender, address, religion, marital status
+  - Validate: 16-digit NIK checksum
+  - Output: Structured JSON with all fields
+
+- **KK (Kartu Keluarga)** - Family Card parser
+  - Extract: Card number, head of family, family member details
+  - Validate: KK number format
+  - Output: Structured family data
+
+- **BPJS Cards** - Insurance card extractors
+  - BPJS Kesehatan (13-digit number)
+  - BPJS Ketenagakerjaan (11-digit number)
+  - Extract participant and coverage information
+
+- **Bank Documents** - Statement and passbook parser
+  - Multiple bank formats
+  - Account numbers, balances, transactions
+  - Date and amount extraction
+
+**Implementation Approach**:
+1. Create mapper class in `app/services/mappers/`
+2. Add validation rules for each document type
+3. Create dedicated API endpoints
+4. Add comprehensive tests
+5. Document with examples
+
+#### Infrastructure Enhancements
+
+**Deployment & Operations**:
+- Docker containerization for easy deployment
+- Docker Compose for full stack setup
+- Health check improvements
+- Monitoring and metrics
+
+**Performance & Scalability**:
+- Redis caching layer for repeated documents
+- Batch processing endpoint for multiple images
+- Celery/Redis queue for async processing
+- Database integration for result storage
+- CDN support for visualized images
+
+**User Experience**:
+- WebSocket support for real-time updates
+- Progress indicators for long operations
+- Mobile-optimized API responses
+- Client SDKs (Python, JavaScript)
+
+#### Quality Improvements
+
+**Testing**:
+- Increase test coverage to 80%+
+- Add integration tests for all endpoints
+- Performance benchmarking tests
+- Load testing configurations
+
+**Documentation**:
+- More usage examples
+- Tutorial for building custom extractors
+- Video tutorials for common tasks
+- API cookbook with recipes
+
+**Core Features**:
+- Additional language models
+- Image preprocessing options
+- Custom watermark configuration
+- Export formats (PDF, DOCX, etc.)
+
+#### How to Get Started
+
+**Example: Adding KTP Extractor**
+
+1. **Create the mapper**:
+```python
+# app/services/mappers/ktp_mapper.py
+class KTPMapper:
+    def extract(self, ocr_result: dict) -> dict:
+        # Parse OCR text
+        # Extract fields using regex/patterns
+        # Validate NIK checksum
+        # Return structured data
+        pass
+```
+
+2. **Add endpoint**:
+```python
+# app/api/v1/endpoints/documents.py
+@router.post("/extract/ktp")
+async def extract_ktp(file: UploadFile):
+    # Run OCR
+    # Apply KTP mapper
+    # Return structured data
+    pass
+```
+
+3. **Add tests**:
+```python
+# tests/test_mappers/test_ktp_mapper.py
+def test_extract_nik():
+    # Test NIK extraction
+    pass
+```
+
+4. **Document and contribute!**
+
+**Ready to contribute?** We're here to help! Open an issue to discuss your proposed feature, and we'll guide you through the process.
+
+---
+
+## Development Guidelines
+
+### Code Style
 
 - Python 3.12+ type hints
 - Google-style docstrings
@@ -142,29 +255,30 @@ We are looking for contributions in:
 - Max line length: 100 characters
 - Use `|` for union types
 
-#### Architecture
+### Architecture
 
 Follow the layer architecture:
+
 - **API Layer**: `app/api/` - HTTP handlers
 - **Service Layer**: `app/services/` - Business logic
 - **Repository Layer**: `app/repositories/` - Data access
 - **Core**: `app/core/` - Config, exceptions, logging
 
-#### Testing
+### Testing
 
 - Minimum 70% test coverage
 - Unit tests for services and repositories
 - Integration tests for endpoints
 - Use fixtures for test data
 
-#### Documentation
+### Documentation
 
 - Update README for new features
 - Add/update docs/ if needed
 - Docstrings for public functions
 - Comments for complex logic
 
-### 5. Contribution Terms
+### Contribution Terms
 
 By contributing, you agree that:
 
@@ -174,7 +288,7 @@ By contributing, you agree that:
 4. **Educational Focus**: Aligned with learning and research goals
 5. **Respect**: Respectful to other contributors and users
 
-### 6. Review Process
+### Review Process
 
 - PRs will be reviewed by the maintainer
 - Feedback will be provided within 1-7 days
@@ -182,14 +296,70 @@ By contributing, you agree that:
 - Approval required before merge
 - Squash merge to maintain clean history
 
-### 7. Recognition
+### Recognition
 
 Contributors will be acknowledged in:
+
 - `CONTRIBUTORS.md` file
 - Release notes
 - About section in documentation
 
-### 8. Getting Help
+---
+
+## Code of Conduct
+
+### Our Standards
+
+Examples of behavior that contributes to a positive environment:
+
+- Demonstrating empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility and apologizing to those affected by our mistakes
+- Focusing on what is best not just for us as individuals, but for the overall community
+
+Examples of unacceptable behavior:
+
+- The use of sexualized language or imagery, and sexual attention or advances of any kind
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or email address, without their explicit permission
+- Other conduct which could reasonably be considered inappropriate in a professional setting
+
+### Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement.
+
+All complaints will be reviewed and investigated promptly and fairly.
+
+---
+
+## For Researchers & Students
+
+We strongly support academic and educational use:
+
+### For Researchers
+
+- Explain your research topic
+- Share papers/publications that use SnapText
+- Consider contributing improvements back
+
+### For Students
+
+- Suitable for thesis, dissertation, or coursework
+- Learn FastAPI, OCR, and clean architecture
+- Build portfolio with open-source contributions
+- Mention on your CV/portfolio
+
+### For Lecturers
+
+- Use for teaching materials
+- Contribute course improvements
+- Student projects can be merged
+
+---
+
+## Getting Help
 
 If you need assistance:
 
@@ -198,39 +368,13 @@ If you need assistance:
 - Create an issue for bug reports
 - Contact maintainer for important matters
 
-### 9. Code of Conduct
+### Resources
 
-**Not Acceptable**:
-- Harassment or disrespectful behavior
-- Spam or excessive self-promotion
-- Proprietary code without clear license
-- Malicious contributions
-
-**Encouraged**:
-- Respect and collaboration
-- Constructive feedback
-- Inclusive and welcoming behavior
-- Focus on education and learning
-
-### 10. For Researchers & Students
-
-We strongly support academic and educational use:
-
-**For Researchers**:
-- Explain your research topic
-- Share papers/publications that use RogaScan
-- Consider contributing improvements back
-
-**For Students**:
-- Suitable for thesis, dissertation, or coursework
-- Learn FastAPI, OCR, and clean architecture
-- Build portfolio with open-source contributions
-- Mention on your CV/portfolio
-
-**For Lecturers**:
-- Use for teaching materials
-- Contribute course improvements
-- Student projects can be merged
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design and patterns
+- [SETUP.md](docs/SETUP.md) - Installation and configuration
+- [API.md](docs/API.md) - Complete API reference
+- [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development workflow
 
 ---
 
@@ -239,12 +383,14 @@ We strongly support academic and educational use:
 - **Maintainer**: amubhya
 - **Organization**: RogaTekno
 
+---
+
 ## License
 
 All contributions are licensed under [MIT License](LICENSE) - see LICENSE file for details.
 
 ---
 
-**Thank you for contributing to RogaScan!**
+**Thank you for contributing to SnapText!**
 
 Together we make OCR technology accessible for everyone.

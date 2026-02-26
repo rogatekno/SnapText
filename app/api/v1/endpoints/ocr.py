@@ -12,7 +12,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
-from app.core.exceptions import RogaScanException
+from app.core.exceptions import SnapTextException
 from app.models.schemas import (
     OCRExtractResponse,
     BoundingBox,
@@ -101,7 +101,7 @@ async def extract_text(
             processing_time_ms=processing_time,
         )
 
-    except RogaScanException:
+    except SnapTextException:
         raise
     except Exception as e:
         from app.core.exceptions import OCRError
@@ -164,7 +164,7 @@ async def visualize(
             },
         )
 
-    except RogaScanException:
+    except SnapTextException:
         raise
     except Exception as e:
         from app.core.exceptions import OCRError

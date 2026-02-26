@@ -7,7 +7,7 @@ assignees: ''
 ---
 
 ## Feature Description
-A clear and concise description of the feature you'd like to see added to RogaScan.
+A clear and concise description of the feature you'd like to see added to SnapText.
 
 ## Problem Statement
 What problem does this feature solve? What use cases does it address?

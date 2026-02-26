@@ -1,6 +1,6 @@
-# RogaScan Setup Guide
+# SnapText Setup Guide
 
-This guide covers installation, configuration, and verification of the RogaScan OCR service.
+This guide covers installation, configuration, and verification of the SnapText OCR service.
 
 ## Prerequisites
 
@@ -18,10 +18,10 @@ This guide covers installation, configuration, and verification of the RogaScan 
 ```bash
 # If cloning from git
 git clone <repository-url>
-cd rogascan
+cd snaptext
 
 # Or if starting fresh, ensure you're in the project directory
-cd rogascan
+cd snaptext
 ```
 
 ### 2. Create Virtual Environment
@@ -71,7 +71,7 @@ python -c "from paddleocr import PaddleOCR; print('PaddleOCR installed successfu
 python -c "from fastapi import FastAPI; print('FastAPI installed successfully')"
 
 # Verify project imports
-python -c "from app.main import app; print('RogaScan imports OK')"
+python -c "from app.main import app; print('SnapText imports OK')"
 ```
 
 ## Configuration
@@ -384,8 +384,8 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 Build and run:
 ```bash
-docker build -t rogascan .
-docker run -p 8000:8000 --env-file .env rogascan
+docker build -t snaptext .
+docker run -p 8000:8000 --env-file .env snaptext
 ```
 
 ### Using Gunicorn (Production)

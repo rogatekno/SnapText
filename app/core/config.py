@@ -1,6 +1,6 @@
 """Application configuration settings.
 
-This module manages all configuration for the RogaScan FastAPI OCR service,
+This module manages all configuration for the SnapText FastAPI OCR service,
 using environment variables with sensible defaults.
 """
 
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     """
 
     # Application Info
-    app_name: str = Field(default="RogaScan", alias="APP_NAME")
+    app_name: str = Field(default="SnapText", alias="APP_NAME")
     app_version: str = Field(default="1.0.0", alias="APP_VERSION")
     app_description: str = Field(
         default="FastAPI OCR Service with PaddleOCR", alias="APP_DESCRIPTION"

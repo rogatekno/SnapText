@@ -1,6 +1,6 @@
-# RogaScan Development Guide
+# SnapText Development Guide
 
-This guide covers the development workflow, coding standards, and contribution guidelines for RogaScan.
+This guide covers the development workflow, coding standards, and contribution guidelines for SnapText.
 
 ## Development Environment Setup
 

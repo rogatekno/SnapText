@@ -27,7 +27,7 @@ If applicable, add screenshots or logs to help explain your problem.
 - Python Version: [e.g. 3.12.0]
 - PaddlePaddle Version: [e.g. 2.6.2]
 - PaddleOCR Version: [e.g. 2.10.0]
-- RogaScan Version: [e.g. 1.0.0]
+- SnapText Version: [e.g. 1.0.0]
 
 ## Additional Context
 Add any other context about the problem here.

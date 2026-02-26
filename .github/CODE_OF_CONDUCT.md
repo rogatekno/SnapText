@@ -128,7 +128,7 @@ https://www.contributor-covenant.org/faq.
 
 ---
 
-**Additional Note for RogaScan Community**:
+**Additional Note for SnapText Community**:
 
 This project is primarily for **educational and research purposes**. We encourage:
 - Learning and teaching
@@ -136,4 +136,4 @@ This project is primarily for **educational and research purposes**. We encourag
 - Helping others grow
 - Sharing knowledge
 
-Let's build a welcoming community for OCR enthusiasts.
+Let's build a welcoming community for OCR enthusiasts and developers.

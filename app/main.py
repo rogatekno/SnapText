@@ -23,8 +23,8 @@ from fastapi.responses import JSONResponse
 from app.api.v1.endpoints import health, ocr
 from app.core.config import get_settings
 from app.core.exceptions import (
-    RogaScanException,
-    rogascan_exception_handler,
+    SnapTextException,
+    snaptext_exception_handler,
     http_exception_handler,
     generic_exception_handler,
 )
@@ -54,9 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Startup
     from app.core.logging import get_logger
 
-    logger = get_logger("lifespan")
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Environment: {settings.environment}")
 
     try:
         # Initialize OCR service (loads model)
@@ -93,7 +91,7 @@ def create_app() -> FastAPI:
     # Create FastAPI app
     app = FastAPI(
         title=settings.app_name,
-        description="""## RogaScan - Open Source OCR Service
+        description="""## SnapText - Open Source OCR Service
 
 **Created by amubhya from RogaTekno**
 
@@ -152,7 +150,7 @@ This project is licensed under the **MIT License** - Free to use, modify, and di
     )
 
     # Register exception handlers
-    app.add_exception_handler(RogaScanException, rogascan_exception_handler)
+    app.add_exception_handler(SnapTextException, snaptext_exception_handler)
     app.add_exception_handler(status.HTTP_422_UNPROCESSABLE_ENTITY, http_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
 

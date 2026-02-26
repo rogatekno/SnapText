@@ -1,6 +1,6 @@
-# RogaScan Troubleshooting Guide
+# SnapText Troubleshooting Guide
 
-This guide covers common issues and their solutions when setting up and running RogaScan.
+This guide covers common issues and their solutions when setting up and running SnapText.
 
 ## Table of Contents
 
@@ -138,7 +138,7 @@ lsof -ti:8000 | xargs kill -9
 **Solution**:
 ```bash
 # Ensure you're in project root
-cd /path/to/rogascan
+cd /path/to/snaptext
 
 # Verify virtual environment is activated
 # Windows: echo %VIRTUAL_ENV%
@@ -342,7 +342,7 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 
 # Or install to shorter path
 # Instead of: C:\Very\Long\Path\To\Project
-# Use: C:\Projects\rogascan
+# Use: C:\Projects\snaptext
 ```
 
 ---

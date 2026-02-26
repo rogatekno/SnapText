@@ -3,6 +3,8 @@ Please include a summary of the changes and the related issue. Please also inclu
 
 Fixes # (issue)
 
+**Note**: SnapText provides generic OCR. For document-specific extraction, please specify the document type you're working on.
+
 ## Type of Change
 Please mark relevant options with an `x`:
 
@@ -51,6 +53,6 @@ Add any other notes about the pull request here.
 
 ---
 
-**Thank you for your contribution to RogaScan!**
+**Thank you for your contribution to SnapText!**
 
 Your contribution helps make OCR technology accessible for education and research.

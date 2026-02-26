@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Ask a question about RogaScan
+about: Ask a question about SnapText
 title: '[QUESTION] '
 labels: question
 assignees: ''

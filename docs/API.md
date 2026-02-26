@@ -1,6 +1,6 @@
-# RogaScan API Reference
+# SnapText API Reference
 
-Complete API documentation for the RogaScan OCR service.
+Complete API documentation for the SnapText OCR service.
 
 ## Base URL
 
