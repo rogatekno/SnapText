@@ -93,12 +93,53 @@ def create_app() -> FastAPI:
     # Create FastAPI app
     app = FastAPI(
         title=settings.app_name,
-        description=settings.app_description,
+        description="""## RogaScan - Open Source OCR Service
+
+**Created by amubhya from RogaTekno**
+
+### License
+This project is licensed under the **MIT License** - Free to use, modify, and distribute.
+
+### Intended Use
+- **Educational Purposes**: Learning OCR technology, FastAPI, and REST API design
+- **Research Purposes**: Academic research and experimentation
+- **Development**: Building custom OCR solutions
+
+### Features
+- Text extraction from images using PaddleOCR
+- Bounding box visualization with watermark
+- Multi-language support (10+ languages)
+- RESTful API with interactive documentation
+- Clean architecture for easy extension
+
+### Terms
+- Free for educational and research use
+- Please give attribution when appropriate
+- Comply with data protection laws
+- Contribute improvements back to community
+
+### Documentation
+- See /docs for interactive API documentation
+- Visit GitHub repository for full documentation
+- Check LICENSE file for full terms
+
+---
+
+**Note**: OCR visualization results include watermark "amubhya from rogatekno"
+""",
         version=settings.app_version,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url=f"{settings.api_v1_prefix}/openapi.json",
         lifespan=lifespan,
+        license_info={
+            "name": "MIT License",
+            "url": "https://opensource.org/licenses/MIT",
+        },
+        contact={
+            "name": "amubhya",
+            "organization": "RogaTekno",
+        },
     )
 
     # Configure CORS

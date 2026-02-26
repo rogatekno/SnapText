@@ -2,6 +2,12 @@
 
 Welcome to the RogaScan documentation. This documentation is designed to help both developers and AI agents understand the project architecture, API, and development workflow.
 
+## Project Status
+- **License**: MIT License (Free for education & research)
+- **Status**: Active, Open Source
+- **Author**: amubhya from RogaTekno
+- **Intended Use**: Educational and Research purposes
+
 ## Documentation Index
 
 ### For AI Agents (Context Understanding)
@@ -24,6 +30,12 @@ Welcome to the RogaScan documentation. This documentation is designed to help bo
   - Error codes
   - Usage examples
 
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+  - PaddlePaddle 3.x compatibility errors
+  - Model download issues
+  - Startup problems
+  - Performance issues
+
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development workflow guide
   - Running the development server
   - Testing strategy
@@ -31,6 +43,12 @@ Welcome to the RogaScan documentation. This documentation is designed to help bo
   - Contributing guidelines
 
 ## Quick Reference
+
+### Project Status
+- **License**: MIT License (Free for education & research)
+- **Status**: Active, Open Source
+- **Author**: amubhya from RogaTekno
+- **Intended Use**: Educational and Research purposes
 
 ### Project Structure
 ```
@@ -58,6 +76,23 @@ rogascan/
 - API Routes: `app/api/v1/endpoints/`
 - Business Logic: `app/services/ocr_service.py`
 - OCR Integration: `app/repositories/ocr_repository.py`
+
+## Open Source
+
+RogaScan is open-source under MIT License:
+- Free to use for education and research
+- Free to modify and extend
+- Free to distribute
+- See [LICENSE](../LICENSE) for details
+
+## Contributing
+
+We welcome contributions! Please see:
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
+- [CONTRIBUTORS.md](../CONTRIBUTORS.md) - List of contributors
+- [Code of Conduct](../.github/CODE_OF_CONDUCT.md)
+
+---
 
 ## For AI Agents
 
@@ -108,3 +143,5 @@ For questions or issues:
 - Check the relevant documentation file above
 - Review the code comments in source files
 - Run tests to see usage examples
+- See [CONTRIBUTING.md](../CONTRIBUTING.md) to contribute
+- Report issues via GitHub Issues

@@ -8,6 +8,8 @@ This guide covers installation, configuration, and verification of the RogaScan 
 - **Operating System**: Windows, macOS, or Linux
 - **Disk Space**: ~2GB for PaddleOCR models
 - **Memory**: 4GB RAM minimum (8GB recommended)
+- **PaddlePaddle**: 2.6.2 (do NOT use 3.x - see Known Issues below)
+- **PaddleOCR**: 2.10.0 (compatible with PaddlePaddle 2.6.x)
 
 ## Installation
 
@@ -271,6 +273,30 @@ pytest --cov=app
 ```
 
 ## Troubleshooting
+
+### PaddlePaddle 3.x Compatibility Issues
+
+**Error**: `ConvertPirAttribute2RuntimeAttribute not support [pir::ArrayAttribute<pir::DoubleAttribute>]`
+
+**Cause**: PaddlePaddle 3.x uses a new IR (PIR) that is not fully supported by PaddleOCR.
+
+**Solution**:
+```bash
+# Uninstall incompatible versions
+pip uninstall paddlepaddle paddleocr -y
+
+# Install compatible versions
+pip install "paddlepaddle>=2.6.0,<3.0.0"
+pip install "paddleocr>=2.7.0,<3.0.0"
+```
+
+**Verification**:
+```bash
+python -c "import paddle; import paddleocr; print(f'PaddlePaddle: {paddle.__version__}'); print(f'PaddleOCR: {paddleocr.__version__}')"
+# Expected output:
+# PaddlePaddle: 2.6.2
+# PaddleOCR: 2.10.0
+```
 
 ### PaddleOCR Model Download Slow
 

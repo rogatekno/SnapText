@@ -239,6 +239,50 @@ class PaddleOCRRepository(OCRRepositoryInterface):
                 # Draw text
                 draw.text(label_position, label, fill=text_color, font=font)
 
+            # Add watermark
+            watermark_text = "amubhya from rogatekno"
+            watermark_font_size = 14
+            try:
+                watermark_font = ImageFont.truetype("arial.ttf", watermark_font_size)
+            except Exception:
+                watermark_font = font
+
+            # Position watermark at bottom right
+            img_width, img_height = image.size
+            watermark_bbox = draw.textbbox((0, 0), watermark_text, font=watermark_font)
+            watermark_width = watermark_bbox[2] - watermark_bbox[0]
+            watermark_height = watermark_bbox[3] - watermark_bbox[1]
+
+            # Add padding
+            padding = 10
+            watermark_x = img_width - watermark_width - padding
+            watermark_y = img_height - watermark_height - padding
+
+            # Draw semi-transparent background for watermark
+            watermark_bg_bbox = (
+                watermark_x - padding,
+                watermark_y - padding // 2,
+                watermark_x + watermark_width + padding,
+                watermark_y + watermark_height + padding // 2
+            )
+
+            # Create transparent overlay for watermark background
+            watermark_overlay = Image.new('RGBA', annotated.size, (255, 255, 255, 0))
+            watermark_draw = ImageDraw.Draw(watermark_overlay)
+            watermark_draw.rectangle(watermark_bg_bbox, fill=(0, 0, 0, 128))
+
+            # Composite the overlay
+            annotated = Image.alpha_composite(annotated.convert('RGBA'), watermark_overlay).convert('RGB')
+            draw = ImageDraw.Draw(annotated)
+
+            # Draw watermark text
+            draw.text(
+                (watermark_x, watermark_y),
+                watermark_text,
+                fill=(255, 255, 255, 255),
+                font=watermark_font
+            )
+
             processing_time = (time.time() - start_time) * 1000  # ms
 
             metadata = {

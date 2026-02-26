@@ -456,8 +456,12 @@ python -m memory_profiler app/main.py
 
 ### Updating Dependencies
 
+⚠️ **IMPORTANT**: Before updating PaddlePaddle or PaddleOCR, check the [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for known compatibility issues. Currently:
+- **PaddlePaddle 2.6.2** (DO NOT upgrade to 3.x)
+- **PaddleOCR 2.10.0** (compatible with 2.7.x - 2.10.x)
+
 ```bash
-# Update requirements.txt
+# For non-PaddleOCR dependencies
 pip install --upgrade package-name
 pip freeze > requirements.txt
 

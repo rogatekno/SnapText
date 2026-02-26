@@ -1,0 +1,63 @@
+MIT License
+
+Copyright (c) 2025 RogaScan (amubhya from rogatekno)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+INTENDED USE NOTICE
+
+This software is intended and designed primarily for:
+
+1. **Educational Purposes**: Learning about OCR technology, FastAPI framework,
+   and REST API design patterns.
+
+2. **Research Purposes**: Academic research, experimentation, and development
+   of new OCR techniques and methodologies.
+
+3. **Non-Commercial Development**: Building upon this work for personal
+   projects, open-source contributions, and educational tools.
+
+While the MIT License allows commercial use, the authors encourage users to:
+
+- Use this software responsibly and ethically
+- Respect user privacy when processing documents
+- Comply with applicable data protection laws (GDPR, PDPA, etc.)
+- Provide attribution when appropriate
+- Contribute improvements back to the community
+
+For commercial deployments or production use, please ensure:
+- Proper security measures are in place
+- Compliance with relevant regulations
+- Adequate testing and validation
+- Consider supporting the original project
+
+---
+
+ATTRIBUTION
+
+This project was created by:
+- **Author**: amubhya
+- **Organization**: RogaTekno
+- **Project**: RogaScan
+- **Year**: 2025
+
+When using this software in publications, research, or derivatives,
+please include appropriate attribution.

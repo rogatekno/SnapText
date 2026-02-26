@@ -4,7 +4,18 @@ This document provides comprehensive context about the RogaScan system architect
 
 ## Overview
 
-RogaScan is a FastAPI-based OCR (Optical Character Recognition) service built with the **Repository Pattern** for clean separation of concerns. The system uses PaddleOCR as the text extraction engine and provides RESTful API endpoints for text extraction and visualization.
+RogaScan is a FastAPI-based OCR (Optical Character Recognition) service built with the **Repository Pattern** for clean separation of concerns. The system uses PaddleOCR 2.10.0 with PaddlePaddle 2.6.2 as the text extraction engine and provides RESTful API endpoints for text extraction and visualization.
+
+## Dependency Version Compatibility
+
+**IMPORTANT**: RogaScan uses specific versions for compatibility:
+- **PaddlePaddle 2.6.2** (NOT 3.x)
+- **PaddleOCR 2.10.0** (2.7.x - 2.10.x range)
+
+PaddlePaddle 3.x has PIR (new IR) that is incompatible with PaddleOCR, causing errors like:
+```
+ConvertPirAttribute2RuntimeAttribute not support [pir::ArrayAttribute<pir::DoubleAttribute>]
+```
 
 ## Architecture Pattern: Repository Pattern
 
@@ -185,10 +196,11 @@ class OCRRepositoryInterface(ABC):
 ```
 
 **Implementation**: `PaddleOCRRepository`
-- Wraps PaddleOCR library
+- Wraps PaddleOCR 2.10.0 library
 - Handles image format conversion (PIL ↔ OpenCV)
 - Manages model lifecycle (lazy loading)
 - Returns structured data (not HTTP responses)
+- Environment variables disable OneDNN/MKLDNN for compatibility
 
 **Conventions**:
 - No business logic

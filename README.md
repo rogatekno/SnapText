@@ -2,21 +2,27 @@
 
 FastAPI OCR service powered by PaddleOCR for text extraction and visualization from images.
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)
+
+**Open Source OCR Service for Education & Research**
+
+Created by **amubhya from RogaTekno** - Licensed under MIT License.
+
 ## Features
 
-- 🚀 **FastAPI** - Modern, fast (high-performance) web framework
-- 🔍 **PaddleOCR** - Latest version (2.9.0+) with improved accuracy
-- 📊 **Repository Pattern** - Clean architecture for maintainability
-- 🎯 **Type Safety** - Full type hints with Python 3.12+
-- 🧪 **Well Tested** - Comprehensive test suite with coverage
-- 📝 **Interactive Docs** - Auto-generated API documentation (Swagger/ReDoc)
-- 🌍 **Multi-language** - Support for 10+ languages
+- **FastAPI** - Modern, fast (high-performance) web framework
+- **PaddleOCR** - Stable version (2.10.0) with PaddlePaddle 2.6.2 for compatibility
+- **Repository Pattern** - Clean architecture for maintainability
+- **Type Safety** - Full type hints with Python 3.12+
+- **Well Tested** - Comprehensive test suite with coverage
+- **Interactive Docs** - Auto-generated API documentation (Swagger/ReDoc)
+- **Multi-language** - Support for 10+ languages
 
 ## Quick Start
 
 ### Windows Installation
-
-#### Option 1: Automated Installation (Recommended)
 
 ```powershell
 # Clone or navigate to project
@@ -26,28 +32,11 @@ cd rogascan
 python -m venv .venv
 .venv\Scripts\activate
 
-# Run installation script
-.\install.ps1
+# Install PaddlePaddle 2.6.2 (stable version)
+pip install "paddlepaddle>=2.6.0,<3.0.0"
 
-# Start server
-.\start.ps1
-```
-
-#### Option 2: Manual Installation
-
-```powershell
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate
-
-# Install PyMuPDF first (to avoid compilation issues)
-pip install "PyMuPDF>=1.24.0"
-
-# Install PaddlePaddle 3.x
-pip install "paddlepaddle>=3.0.0"
-
-# Install PaddleOCR latest
-pip install "paddleocr>=2.9.0"
+# Install PaddleOCR 2.10.0 (compatible with PaddlePaddle 2.6.x)
+pip install "paddleocr>=2.7.0,<3.0.0"
 
 # Install remaining dependencies
 pip install -r requirements.txt
@@ -55,8 +44,8 @@ pip install -r requirements.txt
 # Create configuration
 copy .env.example .env
 
-# Start server (use start.bat or start.ps1)
-.\start.bat
+# Start server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Linux/macOS Installation
@@ -217,6 +206,7 @@ See [SETUP.md](docs/SETUP.md) for detailed setup instructions.
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design and patterns
 - [SETUP.md](docs/SETUP.md) - Installation and configuration
 - [API.md](docs/API.md) - Complete API reference
+- [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development workflow
 
 ## Architecture
@@ -246,10 +236,76 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 - Python 3.12 or 3.13
 - 4GB RAM minimum (8GB recommended)
 - ~2GB disk space for models
+- **PaddlePaddle 2.6.2** (NOT 3.x - compatibility issues)
+- **PaddleOCR 2.10.0** (compatible with PaddlePaddle 2.6.x)
 
-## License
+## Known Issues & Fixes
 
-MIT License - see LICENSE file for details
+### PaddlePaddle 3.x Compatibility
+**Issue**: PaddlePaddle 3.x uses PIR (new IR) that is not fully supported by PaddleOCR, causing errors like:
+```
+ConvertPirAttribute2RuntimeAttribute not support [pir::ArrayAttribute<pir::DoubleAttribute>]
+```
+
+**Solution**: Use PaddlePaddle 2.6.2 with PaddleOCR 2.10.0 (already configured in requirements.txt)
+
+## License & Usage
+
+### 📜 MIT License
+
+RogaScan is open-source and licensed under the **MIT License** - see [LICENSE](LICENSE) file for details.
+
+This means you are **FREE** to:
+- ✅ Use for personal or commercial projects
+- ✅ Modify and customize the code
+- ✅ Distribute and share your modifications
+- ✅ Use for educational purposes
+- ✅ Use for research and academic work
+
+### Intended Use
+
+RogaScan is designed primarily for:
+
+1. **Educational Purposes**
+   - Learning about OCR technology
+   - Understanding FastAPI framework
+   - Studying REST API design patterns
+   - Teaching materials for courses
+
+2. **Research Purposes**
+   - Academic research projects
+   - Experimentation with OCR techniques
+   - Benchmarking different approaches
+   - Publishing papers and articles
+
+3. **Development**
+   - Building upon for your projects
+   - Creating custom OCR solutions
+   - Integration into other applications
+   - Open-source contributions
+
+### Terms & Conditions
+
+While freely available, please:
+
+- **Respect Privacy**: Comply with data protection laws (GDPR, PDPA, etc.)
+- **Give Attribution**: Credit "amubhya from rogatekno" when appropriate
+- **Contribute Back**: Share improvements with the community
+- **Use Responsibly**: Follow ethical guidelines for AI/OCR usage
+
+For full license terms, see [LICENSE](LICENSE).
+
+### Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Areas needing contributions:**
+- Document field extraction (KTP, KK, BPJS, etc.)
+- Batch processing endpoint
+- Docker support
+- Additional language support
+- Performance optimizations
+- Test coverage improvements
 
 ## Contributing
 
@@ -263,6 +319,30 @@ Contributions welcome! Please see [DEVELOPMENT.md](docs/DEVELOPMENT.md) for guid
 
 ## Acknowledgments
 
-- [FastAPI](https://fastapi.tiangolo.com/) - Web framework
+Built with:
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) - OCR engine
 - [Pydantic](https://docs.pydantic.dev/) - Data validation
+- [PaddlePaddle](https://github.com/PaddlePaddle/Paddle) - Deep learning framework
+
+---
+
+## Star & Share
+
+If you find RogaScan useful for your education or research:
+
+- **Star** this repository on GitHub
+- **Share** with fellow students/researchers
+- **Spread the word** about this free resource
+- **Contribute** improvements back to community
+
+## Contact
+
+- **Author**: amubhya
+- **Organization**: RogaTekno
+- **Project**: RogaScan
+- **Year**: 2025
+
+---
+
+**Developed by amubhya from RogaTekno** for the global education and research community.
