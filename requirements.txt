@@ -1,0 +1,27 @@
+# Core Dependencies
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+paddlepaddle>=2.6.0,<3.0.0
+paddleocr>=2.7.0,<3.0.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+python-multipart>=0.0.17
+
+# Image Processing
+Pillow>=11.0.0
+opencv-python>=4.10.0
+numpy>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+loguru>=0.7.3
+
+# Development Dependencies (install with: pip install -e ".[dev]")
+# pytest>=8.0.0
+# pytest-asyncio>=0.23.0
+# pytest-cov>=4.1.0
+# black>=24.0.0
+# ruff>=0.2.0
+# mypy>=1.8.0
+# pre-commit>=3.6.0
+# httpx>=0.26.0
