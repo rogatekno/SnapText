@@ -57,15 +57,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     logger = get_logger(__name__)
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
 
-    try:
-        # Initialize OCR service (loads model)
-        ocr_service = get_ocr_service()
-        await ocr_service.initialize()
-
-        logger.info("OCR service initialized successfully")
-    except Exception as e:
-        logger.warning(f"OCR service initialization failed: {e}")
-        logger.warning("OCR will be initialized on first request")
+    # Skip model loading on startup to prevent crashes on low-resource servers
+    # Model will be loaded on first request (lazy loading)
+    logger.info("OCR model will be loaded on first request (lazy loading)")
 
     yield
 

@@ -58,15 +58,15 @@ services:
       - FLAGS_cudnn_frontend_ops=False
       - FLAGS_use_cublas_tensorop_math=false
 
-    # Resource limits for t3 instances (adjust based on instance size)
+    # Resource limits (INCREASED for PaddleOCR - minimum 2GB needed)
     deploy:
       resources:
         limits:
-          cpus: '1.0'      # Adjust based on your t3 size
-          memory: 1G       # Adjust based on your t3 size
+          cpus: '2.0'      # Increased for PaddleOCR
+          memory: 2G       # MINIMUM for PaddleOCR, recommend 4G if possible
         reservations:
-          cpus: '0.25'     # Minimum CPU for burstable
-          memory: 512M
+          cpus: '0.5'      # Minimum CPU
+          memory: 1G       # Minimum memory reservation
 
     # Port mapping (handled by Coolify)
     # expose:

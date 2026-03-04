@@ -30,9 +30,13 @@ async def health_check() -> HealthResponse:
     ocr_service = get_ocr_service()
     ocr_repository = get_ocr_repository()
 
+    # Always return healthy even if OCR not ready yet
+    # This prevents 502 errors during initial startup on low-resource servers
+    ocr_ready = ocr_repository.is_model_loaded()
+
     return HealthResponse(
-        status="healthy" if ocr_service.is_ready() else "initializing",
+        status="healthy",  # Always healthy - API is responding
         version=settings.app_version,
-        paddleocr_loaded=ocr_repository.is_model_loaded(),
+        paddleocr_loaded=ocr_ready,
         environment=settings.environment,
     )

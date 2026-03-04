@@ -62,9 +62,21 @@ class PaddleOCRRepository(OCRRepositoryInterface):
         try:
             start_time = time.time()
 
+            # LOW RESOURCE OPTIMIZATIONS for PaddleOCR
             self._ocr_engine = PaddleOCR(
                 use_angle_cls=self._use_angle_cls,
                 lang=self._lang,
+                show_log=False,
+                # Force CPU mode and limit resource usage
+                use_gpu=False,
+                max_batch_size=1,
+                # Enable CPU optimizations if available
+                enable_mkldnn=True,
+                cpu_threads=2,
+                # Use lightweight models
+                det_limit_side_len=960,
+                box_thresh=0.5,
+                unclip_ratio=1.6,
             )
 
             load_time = time.time() - start_time
