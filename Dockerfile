@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for SnapText OCR Service
-# Optimized for AWS t3 instances (burstable, lightweight)
+# Optimized for Coolify deployment
 
 # Stage 1: Builder
 FROM python:3.12-slim AS builder
@@ -22,8 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgl1-mesa-glx \
-    libgthread-2.0-0 \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -53,8 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
-    libgl1-mesa-glx \
-    libgthread-2.0-0 \
+    libgl1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
