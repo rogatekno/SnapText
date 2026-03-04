@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Startup
     from app.core.logging import get_logger
 
+    logger = get_logger(__name__)
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
 
     try:

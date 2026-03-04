@@ -1,0 +1,109 @@
+# Docker Compose for SnapText OCR Service
+# Optimized for AWS t3 instances (burstable, lightweight)
+
+version: '3.8'
+
+services:
+  ocr-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: snaptext-ocr:latest
+    container_name: snaptext-ocr
+
+    # Environment variables
+    environment:
+      # App Configuration
+      - APP_NAME=SnapText
+      - APP_VERSION=1.0.0
+      - ENVIRONMENT=production
+      - DEBUG=false
+
+      # Server Configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+      - WORKERS=1
+
+      # API Configuration
+      - API_V1_PREFIX=/api/v1
+
+      # CORS Configuration (adjust for production)
+      - CORS_ORIGINS=["*"]
+      - CORS_ALLOW_CREDENTIALS=true
+      - CORS_ALLOW_METHODS=["*"]
+      - CORS_ALLOW_HEADERS=["*"]
+
+      # PaddleOCR Configuration
+      - PADDLEOCR_LANG=en
+      - PADDLEOCR_USE_ANGLE_CLS=true
+
+      # Upload Configuration
+      - MAX_UPLOAD_SIZE_MB=10
+
+      # Logging Configuration
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - LOG_FILE_PATH=logs/app.log
+      - LOG_ROTATION=500 MB
+      - LOG_RETENTION=10 days
+
+      # Performance Configuration (tuned for t3 instances)
+      - REQUEST_TIMEOUT_SECONDS=60
+      - ASYNC_PROCESSING_ENABLED=true
+
+      # PaddlePaddle Environment Variables (CRITICAL)
+      - INFERENCE_ENFORCE_USE_ONEDNN=0
+      - FLAGS_use_mkldnn=false
+      - XLAN_ENABLE=0
+      - FLAGS_cudnn_frontend_ops=False
+      - FLAGS_use_cublas_tensorop_math=false
+
+    # Resource limits for t3 instances (adjust based on instance size)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'      # Adjust based on your t3 size
+          memory: 1G       # Adjust based on your t3 size
+        reservations:
+          cpus: '0.25'     # Minimum CPU for burstable
+          memory: 512M
+
+    # Port mapping (handled by Coolify)
+    # expose:
+    #   - 8000
+
+    # Volume mounts
+    volumes:
+      # Persist logs
+      - ./logs:/app/logs
+      # Cache for OCR models (optional, for faster restarts)
+      - ocr-cache:/tmp/ocr_cache
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes
+volumes:
+  ocr-cache:
+    driver: local
+
+# Optional: Network configuration
+networks:
+  default:
+    name: snaptext-network
+    driver: bridge
