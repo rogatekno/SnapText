@@ -9,7 +9,7 @@ FastAPI OCR service powered by PaddleOCR for text extraction and visualization f
 
 **Open Source OCR Service for Education & Research**
 
-Created by **amubhya from RogaTekno** - Licensed under MIT License.
+Created by **RogaTekno** - Licensed under MIT License.
 
 ---
 
@@ -634,7 +634,7 @@ SnapText is designed primarily for:
 While freely available, please:
 
 - **Respect Privacy**: Comply with data protection laws (GDPR, PDPA, etc.)
-- **Give Attribution**: Credit "amubhya from rogatekno" when appropriate
+- **Give Attribution**: Credit "RogaTekno" when appropriate
 - **Contribute Back**: Share improvements with the community
 - **Use Responsibly**: Follow ethical guidelines for AI/OCR usage
 
@@ -748,4 +748,5 @@ If you find SnapText useful:
 
 ---
 
-**Developed by amubhya from RogaTekno** for the global education and research community.
+**Developed by RogaTekno** for the global education and research community.
+

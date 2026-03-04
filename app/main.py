@@ -93,7 +93,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         description="""## SnapText - Open Source OCR Service
 
-**Created by amubhya from RogaTekno**
+**Created by RogaTekno**
 
 ### License
 This project is licensed under the **MIT License** - Free to use, modify, and distribute.
@@ -123,7 +123,7 @@ This project is licensed under the **MIT License** - Free to use, modify, and di
 
 ---
 
-**Note**: OCR visualization results include watermark "amubhya from rogatekno"
+**Note**: OCR visualization results include watermark "RogaTekno"
 """,
         version=settings.app_version,
         docs_url="/docs",

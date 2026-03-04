@@ -5,7 +5,7 @@ Welcome to the SnapText documentation. This documentation is designed to help bo
 ## Project Status
 - **License**: MIT License (Free for education & research)
 - **Status**: Active, Open Source
-- **Author**: amubhya from RogaTekno
+- **Author**: RogaTekno
 - **Intended Use**: Educational and Research purposes
 
 ## Documentation Index
@@ -47,7 +47,7 @@ Welcome to the SnapText documentation. This documentation is designed to help bo
 ### Project Status
 - **License**: MIT License (Free for education & research)
 - **Status**: Active, Open Source
-- **Author**: amubhya from RogaTekno
+- **Author**: RogaTekno
 - **Intended Use**: Educational and Research purposes
 
 ### Project Structure

@@ -240,7 +240,7 @@ class PaddleOCRRepository(OCRRepositoryInterface):
                 draw.text(label_position, label, fill=text_color, font=font)
 
             # Add watermark
-            watermark_text = "amubhya from rogatekno"
+            watermark_text = "RogaTekno"
             watermark_font_size = 14
             try:
                 watermark_font = ImageFont.truetype("arial.ttf", watermark_font_size)
