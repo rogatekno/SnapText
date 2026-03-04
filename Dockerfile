@@ -56,9 +56,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -u 1000 -s /bin/bash app && \
-    mkdir -p /app/logs /tmp/ocr_cache && \
+# Create non-root user first
+RUN useradd -m -u 1000 -s /bin/bash app
+
+# Create directories and set ownership
+RUN mkdir -p /app /tmp/ocr_cache && \
     chown -R app:app /app /tmp/ocr_cache
 
 WORKDIR /app

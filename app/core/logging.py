@@ -42,20 +42,25 @@ def setup_logging() -> None:
 
     # Add file handler with rotation
     log_file_path = Path(settings.log_file_path)
-    log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.add(
-        settings.log_file_path,
-        format=log_format,
-        level=settings.log_level,
-        rotation=settings.log_rotation,
-        retention=settings.log_retention,
-        compression="zip",
-        backtrace=True,
-        diagnose=settings.debug,
-        enqueue=True,  # Async logging
-        serialize=use_json,  # Use built-in JSON serialization
-    )
+    try:
+        log_file_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            settings.log_file_path,
+            format=log_format,
+            level=settings.log_level,
+            rotation=settings.log_rotation,
+            retention=settings.log_retention,
+            compression="zip",
+            backtrace=True,
+            diagnose=settings.debug,
+            enqueue=True,  # Async logging
+            serialize=use_json,  # Use built-in JSON serialization
+        )
+    except (PermissionError, OSError):
+        # If we can't write to file (e.g., in Docker with permission issues),
+        # just skip file logging and use console only
+        logger.warning(f"Cannot write to log file {settings.log_file_path}, using console only")
 
     logger.info(
         f"Logging initialized - Level: {settings.log_level}, "
