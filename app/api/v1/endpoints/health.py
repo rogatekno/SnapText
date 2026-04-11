@@ -37,6 +37,6 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status="healthy",  # Always healthy - API is responding
         version=settings.app_version,
-        paddleocr_loaded=ocr_ready,
+        ocr_model_loaded=ocr_ready,
         environment=settings.environment,
     )

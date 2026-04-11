@@ -4,13 +4,7 @@ This module creates and configures the FastAPI application with
 all routes, middleware, and exception handlers.
 """
 
-# IMPORTANT: Set environment variables BEFORE any PaddlePaddle imports
-# This prevents OneDNN compatibility issues
 import os
-
-os.environ["INFERENCE_ENFORCE_USE_ONEDNN"] = "0"
-os.environ["FLAGS_use_mkldnn"] = "false"
-os.environ["XLAN_ENABLE"] = "0"
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -99,7 +93,7 @@ This project is licensed under the **MIT License** - Free to use, modify, and di
 - **Development**: Building custom OCR solutions
 
 ### Features
-- Text extraction from images using PaddleOCR
+- Text extraction from images using RapidOCR (ONNX Runtime)
 - Bounding box visualization with watermark
 - Multi-language support (10+ languages)
 - RESTful API with interactive documentation

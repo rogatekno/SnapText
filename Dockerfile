@@ -4,11 +4,8 @@
 # Stage 1: Builder
 FROM python:3.12-slim AS builder
 
-# Set environment variables for PaddlePaddle before any imports
-ENV INFERENCE_ENFORCE_USE_ONEDNN=0 \
-    FLAGS_use_mkldnn=false \
-    XLAN_ENABLE=0 \
-    PYTHONUNBUFFERED=1 \
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -38,10 +35,7 @@ RUN pip install --upgrade pip setuptools wheel && \
 FROM python:3.12-slim
 
 # Set environment variables
-ENV INFERENCE_ENFORCE_USE_ONEDNN=0 \
-    FLAGS_use_mkldnn=false \
-    XLAN_ENABLE=0 \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/home/app/.local/bin:$PATH"
 

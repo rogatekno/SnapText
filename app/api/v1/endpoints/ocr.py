@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.exceptions import SnapTextException
 from app.models.schemas import (
     OCRExtractResponse,
+    OCRMapResponse,
     BoundingBox,
     TextRegion,
     OCRResult,
@@ -175,6 +176,74 @@ async def visualize(
         ) from e
 
 
+@router.post(
+    "/map",
+    response_model=OCRMapResponse,
+    summary="Map OCR results to specific fields",
+    description="Extract specific data fields from an image by providing their labels",
+)
+async def map_fields(
+    file: UploadFile = File(..., description="Image file to process"),
+    fields: str = Form(..., description="Comma-separated labels (e.g., 'Nama, NIK')"),
+    lang: str = Form(
+        default="en",
+        description="OCR language code",
+        pattern="^(en|id|ch|japan|korean|vi|fr|german|it|portuguese|spanish)$",
+    ),
+):
+    """Extract specific fields from document based on labels.
+
+    Args:
+        file: Uploaded image file
+        fields: Comma-separated list of labels or JSON array
+        lang: OCR language code
+
+    Returns:
+        OCRMapResponse with mapped key-value pairs
+    """
+    start_time = time.time()
+    ocr_service = get_ocr_service()
+
+    # Parse field list from form string
+    try:
+        import json
+        field_list = json.loads(fields)
+        if not isinstance(field_list, list):
+            field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
+    except (json.JSONDecodeError, TypeError):
+        field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
+
+    try:
+        # Read file content
+        file_content = await file.read()
+
+        # Perform mapping
+        mapped_data = await ocr_service.map_text_from_file(
+            file_content=file_content,
+            filename=file.filename or "unknown",
+            fields=field_list,
+            lang=lang,
+        )
+
+        processing_time = (time.time() - start_time) * 1000
+
+        return OCRMapResponse(
+            success=True,
+            data=mapped_data,
+            processing_time_ms=processing_time,
+        )
+
+    except SnapTextException:
+        raise
+    except Exception as e:
+        from app.core.exceptions import OCRError
+
+        raise OCRError(
+            message=f"Unexpected error during field mapping: {str(e)}",
+            details={"filename": file.filename, "fields": field_list},
+        ) from e
+
+
 @router.get(
     "/info",
     summary="Get OCR service information",
@@ -206,7 +275,7 @@ async def get_info():
                 "portuguese",
                 "spanish",
             ],
-            "default_language": settings.paddleocr_lang,
+            "default_language": settings.ocr_lang,
             "service_ready": ocr_service.is_ready(),
         },
     }

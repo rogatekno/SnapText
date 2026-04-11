@@ -4,7 +4,7 @@ This module defines all schemas used for API request validation
 and response formatting.
 """
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -46,7 +46,7 @@ class HealthResponse(BaseResponse):
 
     status: str = Field(description="Health status: 'healthy' or 'unhealthy'")
     version: str = Field(description="Application version")
-    paddleocr_loaded: bool = Field(description="Whether PaddleOCR is loaded")
+    ocr_model_loaded: bool = Field(description="Whether OCR model is loaded")
     environment: str = Field(description="Current environment (dev/prod)")
 
 
@@ -134,6 +134,25 @@ class OCRExtractResponse(OCRDataResponse):
     """Response schema for OCR extract endpoint."""
 
     pass
+
+
+# ============================================================================
+# OCR Map Request/Response
+# ============================================================================
+
+
+class OCRTableDefinition(BaseModel):
+    """Definition for a table to extract."""
+
+    name: str = Field(..., description="Key name for the resulting array")
+    columns: List[str] = Field(..., description="List of column headers to look for")
+
+
+class OCRMapResponse(BaseResponse):
+    """Response schema for OCR mapping endpoint."""
+
+    data: Dict[str, Any] = Field(..., description="Mapped key-value pairs")
+    processing_time_ms: float = Field(description="Processing time in milliseconds")
 
 
 # ============================================================================

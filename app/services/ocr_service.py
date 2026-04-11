@@ -6,11 +6,13 @@ validation and error handling.
 """
 
 import io
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image
 from pydantic import ValidationError
+from rapidfuzz import process, fuzz
 
 from app.core.config import get_settings
 from app.core.exceptions import (
@@ -77,6 +79,111 @@ class OCRService:
         result["filename"] = filename
 
         return result
+
+    async def map_text_from_file(
+        self, file_content: bytes, filename: str, fields: List[str], lang: str = "en"
+    ) -> Dict[str, Any]:
+        """Extract specific fields from document based on labels.
+
+        Args:
+            file_content: Raw file content
+            filename: Original filename
+            fields: List of label strings to look for
+            lang: OCR language code
+
+        Returns:
+            Dictionary of mapped fields and their values
+        """
+        # 1. OCR the image to get all regions
+        ocr_result = await self.extract_text_from_file(file_content, filename, lang)
+        regions = ocr_result.get("regions", [])
+
+        if not regions:
+            return {re.sub(r'[^a-zA-Z0-9]', '_', f).lower().strip('_'): None for f in fields}
+
+        # 2. Perform mapping based on spatial heuristics
+        mapped_data = self._perform_mapping(regions, fields)
+
+        return mapped_data
+
+    def _perform_mapping(self, regions: List[Dict[str, Any]], target_labels: List[str]) -> Dict[str, Any]:
+        """Perform spatial mapping of labels to values.
+
+        Heuristics:
+        - Labels are matched using fuzzy matching (RapidFuzz).
+        - Values are expected to be either to the right of or below the label.
+        - Common delimiters (:, =, -) are stripped.
+        """
+        results = {}
+
+        # Augment regions with spatial metadata for easier searching
+        for r in regions:
+            bbox = r["bbox"]
+            # bbox: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+            xs = [p[0] for p in bbox]
+            ys = [p[1] for p in bbox]
+            r["_min_x"], r["_max_x"] = min(xs), max(xs)
+            r["_min_y"], r["_max_y"] = min(ys), max(ys)
+            r["_center_x"] = (r["_min_x"] + r["_max_x"]) / 2
+            r["_center_y"] = (r["_min_y"] + r["_max_y"]) / 2
+            r["_height"] = r["_max_y"] - r["_min_y"]
+            r["_width"] = r["_max_x"] - r["_min_x"]
+
+        region_texts = [r["text"] for r in regions]
+
+        for label in target_labels:
+            # Create a slugified key for the response
+            clean_key = re.sub(r'[^a-zA-Z0-9]', '_', label).lower().strip('_')
+            results[clean_key] = None
+
+            # Find best match for label using fuzzy matching
+            # threshold 80 is usually safe for OCR errors
+            matches = process.extractOne(label, region_texts, scorer=fuzz.WRatio)
+            if not matches or matches[1] < 70:
+                continue
+
+            best_match_text, score, match_idx = matches
+            label_region = regions[match_idx]
+
+            # Try to see if the value is already in the same region (e.g., "Nama: John")
+            # If label is in Indonesian, it might contain ":"
+            label_parts = re.split(r'[:=]', best_match_text, 1)
+            if len(label_parts) > 1 and len(label_parts[1].strip()) > 1:
+                results[clean_key] = label_parts[1].strip()
+                continue
+
+            # Look for values in other regions based on proximity
+            potential_values = []
+            for i, r in enumerate(regions):
+                if i == match_idx:
+                    continue
+
+                # HEURISTIC A: Same line (horizontal), to the right
+                # Vertical centers should be close, and r should be after label_region
+                v_dist = abs(r["_center_y"] - label_region["_center_y"])
+                h_dist = r["_min_x"] - label_region["_max_x"]
+                
+                if v_dist < label_region["_height"] * 0.7 and 0 < h_dist < label_region["_width"] * 3:
+                    potential_values.append((r, h_dist, "horizontal"))
+
+                # HEURISTIC B: Directly below (vertical)
+                # Horizontal centers should be close, and r should be below label_region
+                elif abs(r["_center_x"] - label_region["_center_x"]) < label_region["_width"] * 0.4:
+                    v_gap = r["_min_y"] - label_region["_max_y"]
+                    if 0 < v_gap < label_region["_height"] * 1.5:
+                        potential_values.append((r, v_gap, "vertical"))
+
+            if potential_values:
+                # Sort by distance
+                potential_values.sort(key=lambda x: x[1])
+                best_val_region = potential_values[0][0]
+                val_text = best_val_region["text"]
+                
+                # Cleanup: remove leading colons/symbols
+                val_text = re.sub(r'^[:=\- ]+', '', val_text).strip()
+                results[clean_key] = val_text if len(val_text) > 0 else None
+
+        return results
 
     async def visualize_file(
         self, file_content: bytes, filename: str
@@ -155,6 +262,9 @@ class OCRService:
             if image.mode not in ("RGB", "RGBA"):
                 image = image.convert("RGB")
 
+            # Optimize image size for memory efficiency
+            image = self._optimize_image(image)
+
             return image
 
         except ImageFormatError:
@@ -165,6 +275,38 @@ class OCRService:
                 filename=filename,
                 details={"size_bytes": file_size, "extension": file_ext},
             ) from e
+
+    def _optimize_image(self, image: Image.Image) -> Image.Image:
+        """Optimize image by resizing if it exceeds max dimensions.
+
+        This prevents excessive memory usage and potential crashes on 
+        low-spec systems when processing very large images.
+
+        Args:
+            image: PIL Image object
+
+        Returns:
+            Optimized PIL Image object
+        """
+        max_dim = settings.ocr_max_dimension
+        width, height = image.size
+
+        if max(width, height) > max_dim:
+            if width > height:
+                new_width = max_dim
+                new_height = int(height * (max_dim / width))
+            else:
+                new_height = max_dim
+                new_width = int(width * (max_dim / height))
+
+            from app.core.logging import get_logger
+            logger = get_logger("ocr_service")
+            logger.info(f"Optimizing image: resizing from {width}x{height} to {new_width}x{new_height}")
+
+            # Use Lanczos for high-quality downsampling
+            return image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+        return image
 
     @staticmethod
     def _get_file_extension(filename: str) -> str:

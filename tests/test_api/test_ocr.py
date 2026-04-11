@@ -20,7 +20,7 @@ class TestHealthEndpoint:
 
         assert data["status"] in ["healthy", "initializing"]
         assert "version" in data
-        assert "paddleocr_loaded" in data
+        assert "ocr_model_loaded" in data
         assert "environment" in data
 
     def test_health_check_when_initialized(self, initialized_test_app: TestClient):
@@ -31,7 +31,7 @@ class TestHealthEndpoint:
         data = response.json()
 
         assert data["status"] == "healthy"
-        assert data["paddleocr_loaded"] is True
+        assert data["ocr_model_loaded"] is True
 
 
 class TestExtractEndpoint:

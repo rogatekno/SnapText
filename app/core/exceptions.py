@@ -83,7 +83,7 @@ class OCRError(SnapTextException):
     def __init__(
         self,
         message: str,
-        ocr_engine: str = "PaddleOCR",
+        ocr_engine: str = "RapidOCR",
         details: Optional[Dict[str, Any]] = None,
     ):
         """Initialize OCR error.

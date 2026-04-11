@@ -1,22 +1,19 @@
-"""OCR repository implementation using PaddleOCR.
+"""OCR repository implementation using RapidOCR with ONNX Runtime.
 
 This module provides a concrete implementation of the OCR repository
-interface using PaddleOCR as the OCR engine.
+interface using RapidOCR as the OCR engine, which runs on ONNX Runtime
+for better performance and lower memory usage on CPU.
 """
 
 import os
 import time
 from functools import lru_cache
-from typing import Any, Dict
-
-# Disable OneDNN/MKLDNN to avoid compatibility issues
-os.environ["INFERENCE_ENFORCE_USE_ONEDNN"] = "0"
-os.environ["FLAGS_use_mkldnn"] = "false"
+from typing import Any, Dict, Optional
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from paddleocr import PaddleOCR
+from rapidocr_onnxruntime import RapidOCR
 
 from app.core.config import get_settings
 from app.core.exceptions import OCRError, ModelLoadError
@@ -25,11 +22,11 @@ from app.repositories.base import OCRRepositoryInterface
 settings = get_settings()
 
 
-class PaddleOCRRepository(OCRRepositoryInterface):
-    """PaddleOCR implementation of OCR repository.
+class RapidOCRRepository(OCRRepositoryInterface):
+    """RapidOCR implementation of OCR repository.
 
-    Handles PaddleOCR model lifecycle and provides text extraction
-    and visualization capabilities.
+    Handles RapidOCR model lifecycle and provides text extraction
+    and visualization capabilities using ONNX Runtime.
     """
 
     def __init__(
@@ -37,22 +34,22 @@ class PaddleOCRRepository(OCRRepositoryInterface):
         lang: str | None = None,
         use_angle_cls: bool | None = None,
     ):
-        """Initialize PaddleOCR repository.
+        """Initialize RapidOCR repository.
 
         Args:
             lang: Default language for OCR
             use_angle_cls: Whether to use angle classifier
         """
-        self._lang = lang if lang is not None else settings.paddleocr_lang
+        self._lang = lang if lang is not None else settings.ocr_lang
         self._use_angle_cls = (
-            use_angle_cls if use_angle_cls is not None else settings.paddleocr_use_angle_cls
+            use_angle_cls if use_angle_cls is not None else settings.ocr_use_angle_cls
         )
 
-        self._ocr_engine: PaddleOCR | None = None
+        self._ocr_engine: Optional[RapidOCR] = None
         self._is_initialized = False
 
     async def initialize(self) -> None:
-        """Initialize PaddleOCR model (lazy loading).
+        """Initialize RapidOCR model (lazy loading).
 
         The model is only loaded when first needed to reduce startup time.
         """
@@ -62,57 +59,41 @@ class PaddleOCRRepository(OCRRepositoryInterface):
         try:
             start_time = time.time()
 
-            # LOW RESOURCE OPTIMIZATIONS for PaddleOCR
-            self._ocr_engine = PaddleOCR(
-                use_angle_cls=self._use_angle_cls,
-                lang=self._lang,
-                show_log=False,
-                # Force CPU mode and limit resource usage
-                use_gpu=False,
-                max_batch_size=1,
-                # Enable CPU optimizations if available
-                enable_mkldnn=True,
-                cpu_threads=2,
-                # Use lightweight models
-                det_limit_side_len=960,
-                box_thresh=0.5,
-                unclip_ratio=1.6,
+            # Initialize RapidOCR
+            # RapidOCR automatically handles model downloading and ONNX Runtime provider setup
+            self._ocr_engine = RapidOCR(
+                width_height_info={'det_limit_side_len': 960},
+                # Additional configuration can be passed here if needed
             )
 
             load_time = time.time() - start_time
             self._is_initialized = True
 
             from app.core.logging import get_logger
-
             logger = get_logger("ocr_repository")
-            logger.info(f"PaddleOCR model loaded in {load_time:.2f}s")
+            logger.info(f"RapidOCR (ONNX Runtime) model loaded in {load_time:.2f}s")
 
         except Exception as e:
             raise ModelLoadError(
-                model_name=f"PaddleOCR ({self._lang})",
+                model_name=f"RapidOCR ({self._lang})",
                 details={"error": str(e), "lang": self._lang},
             ) from e
 
     async def extract_text(
         self, image: Image.Image, lang: str = "en"
     ) -> Dict[str, Any]:
-        """Extract text from image using PaddleOCR.
+        """Extract text from image using RapidOCR.
 
         Args:
             image: PIL Image object to process
-            lang: Language code for OCR (e.g., 'en', 'id')
+            lang: Language code for OCR (currently RapidOCR handles this via model selection)
 
         Returns:
-            Dictionary containing:
-                - text: Full extracted text
-                - confidence: Average confidence score (0-1)
-                - regions: List of text regions with bbox and confidence
-                - language: The language used
+            Dictionary containing OCR results
 
         Raises:
             OCRError: If OCR processing fails
         """
-        # Lazy initialization if not already initialized
         if not self._is_initialized or self._ocr_engine is None:
             await self.initialize()
 
@@ -123,20 +104,20 @@ class PaddleOCRRepository(OCRRepositoryInterface):
             img_array = self._pil_to_opencv(image)
 
             # Run OCR
-            result = self._ocr_engine.ocr(img_array)
+            # result is a list of [bbox, text, confidence]
+            # elapse is [det_time, cls_time, rec_time]
+            result, elapse = self._ocr_engine(img_array)
 
             # Parse results
             regions = []
             full_text_lines = []
             confidences = []
 
-            if result and result[0]:
-                for idx, line in enumerate(result[0]):
-                    bbox = line[0]  # Bounding box coordinates
-                    text_info = line[1]  # (text, confidence)
-
-                    text = text_info[0]
-                    confidence = float(text_info[1])
+            if result:
+                for idx, line in enumerate(result):
+                    bbox = line[0]  # Bounding box coordinates [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+                    text = line[1]
+                    confidence = float(line[2])
 
                     regions.append(
                         {
@@ -161,7 +142,6 @@ class PaddleOCRRepository(OCRRepositoryInterface):
             processing_time = (time.time() - start_time) * 1000  # ms
 
             from app.core.logging import get_logger
-
             logger = get_logger("ocr_repository")
             logger.debug(
                 f"Extracted {len(regions)} regions in {processing_time:.2f}ms, "
@@ -175,11 +155,13 @@ class PaddleOCRRepository(OCRRepositoryInterface):
                 "region_count": len(regions),
                 "language": lang,
                 "processing_time_ms": processing_time,
+                "det_time_ms": elapse[0] * 1000 if elapse else 0,
+                "rec_time_ms": elapse[2] * 1000 if elapse else 0,
             }
 
-        except OCRError:
-            raise
         except Exception as e:
+            if isinstance(e, OCRError):
+                raise
             raise OCRError(
                 message=f"Failed to extract text: {str(e)}",
                 details={"lang": lang, "image_size": image.size},
@@ -195,11 +177,7 @@ class PaddleOCRRepository(OCRRepositoryInterface):
 
         Returns:
             Tuple of (annotated image, metadata dict)
-
-        Raises:
-            OCRError: If visualization fails
         """
-        # Lazy initialization if not already initialized
         if not self._is_initialized or self._ocr_engine is None:
             await self.initialize()
 
@@ -223,16 +201,13 @@ class PaddleOCRRepository(OCRRepositoryInterface):
 
             # Try to load a font
             try:
-                # Try to use a common font
                 font = ImageFont.truetype("arial.ttf", 16)
             except Exception:
-                # Fallback to default font
                 font = ImageFont.load_default()
 
-            # Draw bounding boxes and text
+            # Draw bounding boxes and confidence labels
             for region in ocr_result["regions"]:
                 bbox = region["bbox"]
-                text = region["text"]
                 confidence = region["confidence"]
 
                 # Draw bounding box polygon
@@ -240,60 +215,22 @@ class PaddleOCRRepository(OCRRepositoryInterface):
                     [(p[0], p[1]) for p in bbox], outline=bbox_color, width=3
                 )
 
-                # Draw text label above bbox
+                # Draw confidence label above bbox
                 label = f"{confidence:.2f}"
                 label_position = (bbox[0][0], bbox[0][1] - 20)
 
                 # Draw background for text
-                text_bbox = draw.textbbox(label_position, label, font=font)
-                draw.rectangle(text_bbox, fill=bbox_color)
+                try:
+                    text_bbox = draw.textbbox(label_position, label, font=font)
+                    draw.rectangle(text_bbox, fill=bbox_color)
+                except Exception:
+                    pass
 
                 # Draw text
                 draw.text(label_position, label, fill=text_color, font=font)
 
-            # Add watermark
-            watermark_text = "RogaTekno"
-            watermark_font_size = 14
-            try:
-                watermark_font = ImageFont.truetype("arial.ttf", watermark_font_size)
-            except Exception:
-                watermark_font = font
-
-            # Position watermark at bottom right
-            img_width, img_height = image.size
-            watermark_bbox = draw.textbbox((0, 0), watermark_text, font=watermark_font)
-            watermark_width = watermark_bbox[2] - watermark_bbox[0]
-            watermark_height = watermark_bbox[3] - watermark_bbox[1]
-
-            # Add padding
-            padding = 10
-            watermark_x = img_width - watermark_width - padding
-            watermark_y = img_height - watermark_height - padding
-
-            # Draw semi-transparent background for watermark
-            watermark_bg_bbox = (
-                watermark_x - padding,
-                watermark_y - padding // 2,
-                watermark_x + watermark_width + padding,
-                watermark_y + watermark_height + padding // 2
-            )
-
-            # Create transparent overlay for watermark background
-            watermark_overlay = Image.new('RGBA', annotated.size, (255, 255, 255, 0))
-            watermark_draw = ImageDraw.Draw(watermark_overlay)
-            watermark_draw.rectangle(watermark_bg_bbox, fill=(0, 0, 0, 128))
-
-            # Composite the overlay
-            annotated = Image.alpha_composite(annotated.convert('RGBA'), watermark_overlay).convert('RGB')
-            draw = ImageDraw.Draw(annotated)
-
-            # Draw watermark text
-            draw.text(
-                (watermark_x, watermark_y),
-                watermark_text,
-                fill=(255, 255, 255, 255),
-                font=watermark_font
-            )
+            # Add watermark "RogaTekno"
+            self._add_watermark(annotated)
 
             processing_time = (time.time() - start_time) * 1000  # ms
 
@@ -304,7 +241,6 @@ class PaddleOCRRepository(OCRRepositoryInterface):
             }
 
             from app.core.logging import get_logger
-
             logger = get_logger("ocr_repository")
             logger.debug(
                 f"Created visualization with {metadata['regions_count']} regions "
@@ -313,71 +249,78 @@ class PaddleOCRRepository(OCRRepositoryInterface):
 
             return annotated, metadata
 
-        except OCRError:
-            raise
         except Exception as e:
+            if isinstance(e, OCRError):
+                raise
             raise OCRError(
                 message=f"Failed to create visualization: {str(e)}",
                 details={"image_size": image.size},
             ) from e
 
-    def is_model_loaded(self) -> bool:
-        """Check if OCR model is loaded and ready.
+    def _add_watermark(self, image: Image.Image) -> None:
+        """Add RogaTekno watermark to the image.
 
-        Returns:
-            True if model is loaded, False otherwise
+        Args:
+            image: PIL Image to watermark (modified in place)
         """
+        draw = ImageDraw.Draw(image)
+        watermark_text = "RogaTekno"
+        
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except Exception:
+            font = ImageFont.load_default()
+
+        # Position at bottom right
+        width, height = image.size
+        try:
+            bbox = draw.textbbox((0, 0), watermark_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        except Exception:
+            text_width, text_height = 100, 20
+
+        padding = 10
+        x = width - text_width - padding
+        y = height - text_height - padding
+
+        # Draw semi-transparent background
+        bg_bbox = [x - 5, y - 5, x + text_width + 5, y + text_height + 5]
+        draw.rectangle(bg_bbox, fill=(0, 0, 0, 128))
+        
+        # Draw text
+        draw.text((x, y), watermark_text, fill=(255, 255, 255, 255), font=font)
+
+    def is_model_loaded(self) -> bool:
+        """Check if OCR model is loaded and ready."""
         return self._is_initialized and self._ocr_engine is not None
 
     async def cleanup(self) -> None:
         """Release OCR model resources."""
         if self._ocr_engine is not None:
-            # PaddleOCR doesn't have explicit cleanup, but we can set to None
             self._ocr_engine = None
             self._is_initialized = False
-
             from app.core.logging import get_logger
-
             logger = get_logger("ocr_repository")
-            logger.info("PaddleOCR resources released")
+            logger.info("RapidOCR resources released")
 
     @staticmethod
     def _pil_to_opencv(image: Image.Image) -> np.ndarray:
-        """Convert PIL Image to OpenCV format.
-
-        Args:
-            image: PIL Image object
-
-        Returns:
-            OpenCV image as numpy array
-        """
-        # Convert PIL to RGB if not already
+        """Convert PIL Image to OpenCV format (BGR)."""
         if image.mode != "RGB":
             image = image.convert("RGB")
-
-        # Convert to numpy array
         img_array = np.array(image)
-
-        # Convert RGB to BGR (OpenCV format)
-        img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-
-        return img_array
+        return cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
 
 # Singleton instance
-_ocr_repository: PaddleOCRRepository | None = None
+_ocr_repository: Optional[RapidOCRRepository] = None
 
 
 @lru_cache
-def get_ocr_repository() -> PaddleOCRRepository:
-    """Get or create singleton OCR repository instance.
-
-    Returns:
-        Cached PaddleOCRRepository instance
-    """
+def get_ocr_repository() -> RapidOCRRepository:
+    """Get or create singleton OCR repository instance."""
     global _ocr_repository
-
     if _ocr_repository is None:
-        _ocr_repository = PaddleOCRRepository()
-
+        _ocr_repository = RapidOCRRepository()
     return _ocr_repository

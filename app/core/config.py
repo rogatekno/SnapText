@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     app_name: str = Field(default="SnapText", alias="APP_NAME")
     app_version: str = Field(default="1.0.0", alias="APP_VERSION")
     app_description: str = Field(
-        default="FastAPI OCR Service with PaddleOCR", alias="APP_DESCRIPTION"
+        default="FastAPI OCR Service with RapidOCR", alias="APP_DESCRIPTION"
     )
     environment: str = Field(default="development", alias="ENVIRONMENT")
     debug: bool = Field(default=False, alias="DEBUG")
@@ -53,11 +53,10 @@ class Settings(BaseSettings):
     cors_allow_methods: List[str] = Field(default=["*"], alias="CORS_ALLOW_METHODS")
     cors_allow_headers: List[str] = Field(default=["*"], alias="CORS_ALLOW_HEADERS")
 
-    # PaddleOCR Configuration
-    paddleocr_lang: str = Field(default="en", alias="PADDLEOCR_LANG")
-    paddleocr_use_angle_cls: bool = Field(
-        default=True, alias="PADDLEOCR_USE_ANGLE_CLS"
-    )
+    # OCR Configuration
+    ocr_lang: str = Field(default="en", alias="OCR_LANG")
+    ocr_use_angle_cls: bool = Field(default=True, alias="OCR_USE_ANGLE_CLS")
+    ocr_max_dimension: int = Field(default=1600, alias="OCR_MAX_DIMENSION")
 
     # Upload Configuration
     max_upload_size_mb: int = Field(default=10, alias="MAX_UPLOAD_SIZE_MB")
