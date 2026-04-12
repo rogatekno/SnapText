@@ -160,7 +160,8 @@ class OCRService:
 
         # Perform table mapping if requested
         if tables:
-            table_results = self._extract_tables(regions, tables)
+            stop_keywords = template.get("stop_keywords", []) if document_type else []
+            table_results = self._extract_tables(regions, tables, stop_keywords=stop_keywords)
             mapped_data.update(table_results)
 
         # Add document type if detected
@@ -174,7 +175,7 @@ class OCRService:
                 for pattern in exclude_patterns:
                     val = re.sub(pattern, '', val, flags=re.IGNORECASE).strip()
                 # Strip leftover separators/punctuation after pattern removal
-                val = re.sub(r'^[,\s]+|[,\s]+$', '', val).strip()
+                val = re.sub(r'^[,\s·:;=\-]+|[,\s·:;=\-]+$', '', val).strip()
                 mapped_data[key] = self._format_value(key, val) if val else None
 
         return mapped_data
@@ -183,7 +184,7 @@ class OCRService:
         """Classify document type based on anchor keywords in regions.
 
         Strategy:
-        1. First check exclusive_anchors - if matched, immediately return that type.
+        1. First check exclusive_anchors - if partial fuzzy match found, immediately return that type.
            This handles cases like KK ('KARTU KELUARGA') vs KTP who share many words.
         2. Fall back to scoring all anchors and returning highest match count.
 
@@ -196,17 +197,25 @@ class OCRService:
         if not regions:
             return None
 
-        all_texts = " ".join(r["text"] for r in regions).lower()
-
+        # Concatenated text for document-wide search
+        raw_full_text = " ".join(r["text"] for r in regions).lower()
+        
         def normalize(t: str) -> str:
             return re.sub(r'[^a-zA-Z0-9]', '', t).lower().strip()
 
-        normalized_texts = [normalize(r["text"]) for r in regions]
+        normalized_full_text = normalize(raw_full_text)
+        normalized_region_texts = [normalize(r["text"]) for r in regions]
 
-        # 1. EXCLUSIVE anchor check — highest priority, first match wins
+        # 1. EXCLUSIVE anchor check — highest priority
+        # Use fuzzy partial match on the full text to handle multi-line or noisy titles
         for doc_type, template in DOCUMENT_TEMPLATES.items():
             for anchor in template.get("exclusive_anchors", []):
-                if anchor.lower() in all_texts:
+                # Check for near-exact match on concatenated text
+                if fuzz.partial_ratio(anchor.lower(), raw_full_text) >= 90:
+                    return doc_type
+                # Also check normalized version
+                norm_anchor = normalize(anchor)
+                if norm_anchor and norm_anchor in normalized_full_text:
                     return doc_type
 
         # 2. Fuzzy scoring across all anchors
@@ -222,7 +231,8 @@ class OCRService:
                 if not norm_anchor:
                     continue
 
-                matches = process.extractOne(norm_anchor, normalized_texts, scorer=fuzz.ratio)
+                # Look for high confidence fuzzy matches in individual regions
+                matches = process.extractOne(norm_anchor, normalized_region_texts, scorer=fuzz.ratio)
                 if matches and matches[1] >= 85:
                     match_count += 1
 
@@ -232,12 +242,23 @@ class OCRService:
 
         return best_type
 
-    def _extract_tables(self, regions: List[Dict[str, Any]], table_definitions: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Extract tabular data based on column headers."""
+    def _extract_tables(self, regions: List[Dict[str, Any]], table_definitions: List[Dict[str, Any]], stop_keywords: List[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """Extract tabular data based on column headers.
+        
+        Args:
+            regions: List of text regions
+            table_definitions: List of table schemas from template
+            stop_keywords: Optional list of keywords that trigger early termination (e.g. signature areas)
+        """
         from rapidfuzz import process, fuzz
         import re
 
         table_results = {}
+        stop_keywords = [s.lower() for s in (stop_keywords or [])]
+
+        # Filter out regions that look like noise/indices (e.g. "(1)", "(2)")
+        def is_index_noise(text: str) -> bool:
+            return bool(re.match(r'^\(\d+\)$', text.strip()))
 
         # 1. Group all regions into horizontal lines based on Y-overlap
         lines = []
@@ -252,7 +273,6 @@ class OCRService:
             prev_r = current_line[-1]
             
             # If Y distance between centers is small enough, it's the same line
-            # Threshold: 50% of average region height
             if abs(r["_center_y"] - prev_r["_center_y"]) < (r["_height"] * 0.5):
                 current_line.append(r)
             else:
@@ -260,32 +280,35 @@ class OCRService:
                 current_line = [r]
         lines.append(sorted(current_line, key=lambda x: x["_min_x"]))
 
+        # 2. Extract each table defined in the template
         for table_def in table_definitions:
             name = table_def["name"]
             columns = table_def["columns"]
             table_results[name] = []
             
-            # slugify column names for output keys
             col_keys = {col: re.sub(r'[^a-zA-Z0-9]', '_', col).lower().strip('_') for col in columns}
             
             # Find the header row
             header_line_idx = -1
-            col_x_map = {} # maps col_name -> (min_x, max_x)
+            col_x_map = {} 
             
             for l_idx, line in enumerate(lines):
-                line_text = " ".join([r["text"] for r in line])
+                # STOP if we hit a terminal keyword (global footer detection)
+                line_text = " ".join([r["text"] for r in line]).lower()
+                if any(sk in line_text for sk in stop_keywords):
+                    break
+
                 found_cols = 0
                 temp_map = {}
                 
                 for col in columns:
                     match = process.extractOne(col, [r["text"] for r in line], scorer=fuzz.WRatio)
-                    if match and match[1] > 75:
+                    if match and match[1] >= 80:
                         found_cols += 1
                         matched_region = line[match[2]]
                         temp_map[col] = (matched_region["_min_x"], matched_region["_max_x"])
                 
-                # If majority of columns found, assume this is the header row
-                if found_cols >= len(columns) * 0.6:
+                if found_cols >= len(columns) * 0.5: # Lowered threshold slightly for noisy KK headers
                     header_line_idx = l_idx
                     col_x_map = temp_map
                     break
@@ -293,24 +316,36 @@ class OCRService:
             if header_line_idx == -1:
                 continue
 
-            # Process rows below header
+            # 3. Process rows below header
             for i in range(header_line_idx + 1, len(lines)):
                 line = lines[i]
+                line_text = " ".join([r["text"] for r in line]).lower()
+                
+                # Check for stop keywords SPECIFIC to this table extraction
+                if any(sk in line_text for sk in stop_keywords):
+                    break
+
+                # Filter out pure index rows (e.g. "(1) (2) (3)")
+                non_noise_regions = [r for r in line if not is_index_noise(r["text"])]
+                if not non_noise_regions:
+                    continue
+
                 row_data = {col_keys[col]: None for col in columns}
                 has_any_data = False
                 
                 for r in line:
-                    # Assign region to a column based on X-center proximity
+                    if is_index_noise(r["text"]): continue
+
                     best_col = None
                     min_dist = float('inf')
                     
                     for col, (c_min_x, c_max_x) in col_x_map.items():
-                        # If region is within column bounds or very close to center
                         c_center = (c_min_x + c_max_x) / 2
                         dist = abs(r["_center_x"] - c_center)
                         
-                        # Tolerance: 0.5 * column width or explicit overlap
-                        if (c_min_x - r["_width"]*0.5 <= r["_center_x"] <= c_max_x + r["_width"]*0.5) or dist < (c_max_x - c_min_x):
+                        # Tolerance: 0.8 * column width
+                        col_w = c_max_x - c_min_x
+                        if (c_min_x - col_w*0.3 <= r["_center_x"] <= c_max_x + col_w*0.3) or dist < col_w:
                            if dist < min_dist:
                                min_dist = dist
                                best_col = col
@@ -409,11 +444,11 @@ class OCRService:
                     continue
 
                 # HEURISTIC A: Same line (horizontal), to the right
-                # Strict vertical tolerance (0.8x height) to avoid bleeding into next row
+                # Tightened horizontal tolerance (2.2x height) to avoid cross-column bleeding in 2-column layouts
                 v_dist = abs(r["_center_y"] - label_region["_center_y"])
                 h_dist = r["_min_x"] - label_region["_max_x"]
                 
-                if v_dist < label_region["_height"] * 0.8 and 0 < h_dist < label_region["_width"] * 3.0:
+                if v_dist < label_region["_height"] * 0.8 and 0 < h_dist < label_region["_width"] * 2.2:
                     # Give a bonus to horizontal (lower distance equivalent)
                     potential_values.append((r, h_dist, "horizontal"))
 

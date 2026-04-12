@@ -138,9 +138,13 @@ async def map_fields(
     fields: str = Form(default="", description="Comma-separated labels"),
     tables: Optional[str] = Form(None, description="JSON table definitions"),
     lang: str = Form(default="id", description="OCR language"),
+    debug: bool = Form(
+        default=False,
+        description="If true, includes a base64 debug image (preprocessed + OCR boxes) in the response"
+    ),
 ):
     """Alias for smart_scan."""
-    return await smart_scan(file=file, fields=fields, tables=tables, lang=lang)
+    return await smart_scan(file=file, fields=fields, tables=tables, lang=lang, debug=debug)
 
 
 @router.post(

@@ -1,0 +1,24 @@
+{
+    "name": "KTP (Indonesian ID Card)",
+    "anchors": ["PROVINSI", "NIK", "NIK :", "TEMPAT/TGL LAHIR", "JENIS KELAMIN", "WARGANEGARA"],
+    "extra_labels": ["Gol. Darah", "Gol Darah"],
+    "exclude_value_patterns": [
+        "Gol[\\.\\/]?\\s*[Dd]arah\\s*[:\\-]?\\s*[A-B]?[ABO]?\\+?\\-?"
+    ],
+    "fields": [
+        "NIK", 
+        "Nama", 
+        "Tempat/Tgl Lahir", 
+        "Jenis Kelamin", 
+        "Alamat", 
+        "RT/RW",
+        "Kel/Desa",
+        "Kecamatan",
+        "Agama", 
+        "Status Perkawinan", 
+        "Pekerjaan", 
+        "Kewarganegaraan", 
+        "Berlaku Hingga"
+    ],
+    "tables": []
+}

@@ -1,0 +1,12 @@
+{
+    "name": "BPJS Ketenagakerjaan",
+    "anchors": ["KARTU PESERTA", "KETENAGAKERJAAN"],
+    "fields": [
+        "Nomor Kartu", 
+        "Nomor KPJ", 
+        "Nama", 
+        "Tgl Terdaftar"
+    ],
+    "mapping_strategy": "sequential",
+    "tables": []
+}
