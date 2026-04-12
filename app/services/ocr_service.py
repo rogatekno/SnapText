@@ -360,12 +360,26 @@ class OCRService:
                 
                 if has_any_data:
                     # Cleanup row data
+                    significant_field_count = 0
                     for k, v in row_data.items():
                         if v:
-                            row_data[k] = re.sub(r'^[:=\- ]+', '', v).strip()
-                            if row_data[k] == "-": row_data[k] = None
+                            # Strip leading/trailing symbols, including common KK dashes
+                            v_clean = re.sub(r'^[,\s·:;=\-]+|[,\s·:;=\-]+$', '', v).strip()
+                            if v_clean and v_clean != "-":
+                                # Skip very common placeholders like just a dot or a single non-word char
+                                if len(v_clean) > 1 or v_clean.isalnum():
+                                    row_data[k] = v_clean
+                                    # Don't count "no" or "no_" column as significant data for empty row check
+                                    if k not in ["no", "no_"]:
+                                        significant_field_count += 1
+                                else:
+                                    row_data[k] = None
+                            else:
+                                row_data[k] = None
                     
-                    table_results[name].append(row_data)
+                    # Only append if at least one significant field (besides row index) was found
+                    if significant_field_count > 0:
+                        table_results[name].append(row_data)
                     
         return table_results
 
