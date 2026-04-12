@@ -26,80 +26,93 @@ router = APIRouter()
 settings = get_settings()
 
 
-class ExtractResponseModel(BaseModel):
-    """Response model for extract endpoint."""
-
-    success: bool = True
-    data: OCRResult
-    processing_time_ms: float
-
-
 @router.post(
-    "/extract",
-    response_model=ExtractResponseModel,
-    summary="Extract text from image",
-    description="Extract text content from an uploaded image using OCR",
+    "/smart-scan",
+    response_model=OCRMapResponse,
+    summary="Perform smart document scan",
+    description="Automatically classify document (KTP, KK, etc.) and extract relevant data fields. "
+                "Can also be used with specific field labels or table definitions.",
 )
-async def extract_text(
+async def smart_scan(
     file: UploadFile = File(..., description="Image file to process"),
+    fields: str = Form(default="", description="Optional: Comma-separated labels or JSON array"),
+    tables: Optional[str] = Form(None, description="Optional: JSON-encoded list of table definitions"),
     lang: str = Form(
-        default="en",
-        description="OCR language code (e.g., 'en', 'id', 'ch')",
+        default="id",
+        description="OCR language code",
         pattern="^(en|id|ch|japan|korean|vi|fr|german|it|portuguese|spanish)$",
     ),
+    debug: bool = Form(
+        default=False,
+        description="If true, includes a base64 debug image (preprocessed + OCR boxes) in the response"
+    ),
 ):
-    """Extract text from uploaded image.
+    """Smart document scan with auto-classification and mapping.
 
     Args:
         file: Uploaded image file
-        lang: OCR language code (default: 'en')
+        fields: Optional labels to look for (auto-classification if empty)
+        tables: Optional table definitions
+        lang: OCR language code (default: 'id')
+        debug: Return a base64 annotated debug image in the response
 
     Returns:
-        ExtractResponseModel with extracted text and metadata
-
-    Raises:
-        ValidationError: If file validation fails
-        OCRError: If OCR processing fails
+        OCRMapResponse with mapped data and document type
     """
     start_time = time.time()
     ocr_service = get_ocr_service()
+
+    # Parse field list from form string
+    try:
+        import json
+        field_list = json.loads(fields) if fields else []
+        if not isinstance(field_list, list):
+            field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
+    except (json.JSONDecodeError, TypeError):
+        field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
+
+    # Parse table definitions
+    table_definitions = None
+    if tables:
+        try:
+            import json
+            table_definitions = json.loads(tables)
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     try:
         # Read file content
         file_content = await file.read()
 
-        # Extract text
-        result = await ocr_service.extract_text_from_file(
+        # Perform smart mapping
+        mapped_data = await ocr_service.map_text_from_file(
             file_content=file_content,
             filename=file.filename or "unknown",
+            fields=field_list,
+            tables=table_definitions,
             lang=lang,
         )
 
-        # Convert to response models
-        regions = [
-            TextRegion(
-                text=r["text"],
-                confidence=r["confidence"],
-                bbox=BoundingBox(coordinates=r["bbox"]),
-                region_id=r.get("region_id"),
-            )
-            for r in result["regions"]
-        ]
+        # Extract document type if it was auto-detected
+        doc_type = mapped_data.pop("_document_type", None)
 
-        ocr_result = OCRResult(
-            text=result["text"],
-            confidence=result["confidence"],
-            regions=regions,
-            region_count=result["region_count"],
-            language=result.get("language"),
-        )
+        # Optionally generate debug image
+        debug_image = None
+        if debug:
+            debug_image = await ocr_service.generate_debug_image(
+                file_content=file_content,
+                filename=file.filename or "unknown",
+                lang=lang,
+            )
 
         processing_time = (time.time() - start_time) * 1000
 
-        return ExtractResponseModel(
+        return OCRMapResponse(
             success=True,
-            data=ocr_result,
+            data=mapped_data,
+            document_type=doc_type,
             processing_time_ms=processing_time,
+            debug_image_base64=debug_image,
         )
 
     except SnapTextException:
@@ -108,9 +121,26 @@ async def extract_text(
         from app.core.exceptions import OCRError
 
         raise OCRError(
-            message=f"Unexpected error during text extraction: {str(e)}",
-            details={"filename": file.filename, "lang": lang},
+            message=f"Unexpected error during smart scan: {str(e)}",
+            details={"filename": file.filename},
         ) from e
+
+
+@router.post(
+    "/map",
+    response_model=OCRMapResponse,
+    summary="Map OCR results to specific fields (Alias for /smart-scan)",
+    description="This is an alias for /smart-scan for backward compatibility.",
+    deprecated=True,
+)
+async def map_fields(
+    file: UploadFile = File(..., description="Image file to process"),
+    fields: str = Form(default="", description="Comma-separated labels"),
+    tables: Optional[str] = Form(None, description="JSON table definitions"),
+    lang: str = Form(default="id", description="OCR language"),
+):
+    """Alias for smart_scan."""
+    return await smart_scan(file=file, fields=fields, tables=tables, lang=lang)
 
 
 @router.post(
@@ -134,27 +164,18 @@ async def visualize(
 
     Returns:
         PNG image with bounding boxes marked
-
-    Raises:
-        ValidationError: If file validation fails
-        OCRError: If visualization fails
     """
     start_time = time.time()
     ocr_service = get_ocr_service()
 
     try:
-        # Read file content
         file_content = await file.read()
-
-        # Create visualization
         img_bytes, img_format, metadata = await ocr_service.visualize_file(
             file_content=file_content,
             filename=file.filename or "unknown",
         )
-
         processing_time = metadata.get("processing_time_ms", (time.time() - start_time) * 1000)
 
-        # Return image with metadata headers
         return Response(
             content=img_bytes,
             media_type=f"image/{img_format.lower()}",
@@ -164,96 +185,13 @@ async def visualize(
                 "X-Format": img_format,
             },
         )
-
     except SnapTextException:
         raise
     except Exception as e:
         from app.core.exceptions import OCRError
-
         raise OCRError(
             message=f"Unexpected error during visualization: {str(e)}",
             details={"filename": file.filename},
-        ) from e
-
-
-@router.post(
-    "/map",
-    response_model=OCRMapResponse,
-    summary="Map OCR results to specific fields",
-    description="Extract specific data fields from an image by providing their labels",
-)
-async def map_fields(
-    file: UploadFile = File(..., description="Image file to process"),
-    fields: str = Form(default="", description="Comma-separated labels (e.g., 'Nama, NIK')"),
-    tables: Optional[str] = Form(None, description="JSON-encoded list of table definitions"),
-    lang: str = Form(
-        default="en",
-        description="OCR language code",
-        pattern="^(en|id|ch|japan|korean|vi|fr|german|it|portuguese|spanish)$",
-    ),
-):
-    """Extract specific fields from document based on labels.
-
-    Args:
-        file: Uploaded image file
-        fields: Comma-separated list of labels or JSON array
-        lang: OCR language code
-
-    Returns:
-        OCRMapResponse with mapped key-value pairs
-    """
-    start_time = time.time()
-    ocr_service = get_ocr_service()
-
-    # Parse field list from form string
-    try:
-        import json
-        field_list = json.loads(fields) if fields else []
-        if not isinstance(field_list, list):
-            field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
-    except (json.JSONDecodeError, TypeError):
-        field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
-
-    # Parse table definitions
-    table_definitions = None
-    if tables:
-        try:
-            import json
-            table_definitions = json.loads(tables)
-        except (json.JSONDecodeError, TypeError):
-            # If invalid JSON, treat as error or ignore? 
-            # For now, let's ignore or handle in service
-            pass
-
-    try:
-        # Read file content
-        file_content = await file.read()
-
-        # Perform mapping
-        mapped_data = await ocr_service.map_text_from_file(
-            file_content=file_content,
-            filename=file.filename or "unknown",
-            fields=field_list,
-            tables=table_definitions,
-            lang=lang,
-        )
-
-        processing_time = (time.time() - start_time) * 1000
-
-        return OCRMapResponse(
-            success=True,
-            data=mapped_data,
-            processing_time_ms=processing_time,
-        )
-
-    except SnapTextException:
-        raise
-    except Exception as e:
-        from app.core.exceptions import OCRError
-
-        raise OCRError(
-            message=f"Unexpected error during field mapping: {str(e)}",
-            details={"filename": file.filename, "fields": field_list},
         ) from e
 
 

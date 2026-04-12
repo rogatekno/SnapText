@@ -185,10 +185,15 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 # Health check
 curl http://localhost:8000/api/v1/health
 
-# Extract text from image
-curl -X POST http://localhost:8000/api/v1/ocr/extract \
+# Perform smart document scan (auto-classification)
+curl -X POST http://localhost:8000/api/v1/ocr/smart-scan \
   -F "file=@document.jpg" \
-  -F "lang=en"
+  -F "lang=id"
+
+# Map specific fields
+curl -X POST http://localhost:8000/api/v1/ocr/smart-scan \
+  -F "file=@document.jpg" \
+  -F "fields=Nama,NIK"
 
 # Get visualization with bounding boxes
 curl -X POST http://localhost:8000/api/v1/ocr/visualize \
@@ -203,18 +208,17 @@ import requests
 
 API_URL = "http://localhost:8000"
 
-# Extract text
+# Smart document scan
 with open("document.jpg", "rb") as f:
     response = requests.post(
-        f"{API_URL}/api/v1/ocr/extract",
+        f"{API_URL}/api/v1/ocr/smart-scan",
         files={"file": f},
-        data={"lang": "en"}
+        data={"lang": "id"}
     )
 
 result = response.json()
-print(f"Extracted text: {result['data']['text']}")
-print(f"Confidence: {result['data']['confidence']:.2%}")
-print(f"Regions found: {result['data']['region_count']}")
+print(f"Detected document: {result['document_type']}")
+print(f"Extracted data: {result['data']}")
 ```
 
 ---
@@ -224,7 +228,7 @@ print(f"Regions found: {result['data']['region_count']}")
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/health` | Health check and service status |
-| POST | `/api/v1/ocr/extract` | Extract text from uploaded image |
+| POST | `/api/v1/ocr/smart-scan` | Smart document scanning and auto-mapping |
 | POST | `/api/v1/ocr/visualize` | Get image with bounding boxes marked |
 | GET | `/api/v1/ocr/info` | Service capabilities and configuration |
 
@@ -258,9 +262,9 @@ See [API.md](docs/API.md) for complete API documentation including:
 
 ### Currently Supported
 
-**Generic Text Extraction**:
-- Extract raw text from any image containing text
-- Get bounding boxes and confidence scores
+- Extract raw data from any image using smart auto-classification
+- Automatically identify document types (KTP, KK, BPJS)
+- Get structured key-value maps of document data
 - Visualize detected text regions
 - Support for 10+ languages
 - Ideal for documents with varying layouts
@@ -503,7 +507,7 @@ SnapText follows the **Repository Pattern** for clean separation of concerns:
 ```
 ┌─────────────────────────────┐
 │   API Layer (FastAPI)       │  HTTP handlers
-│  - /extract (generic OCR)   │
+│  - /smart-scan (doc parsing)│
 │  - /visualize (bounding boxes) │
 │  - /health (service status) │
 │  - /info (capabilities)     │

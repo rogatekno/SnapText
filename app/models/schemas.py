@@ -152,7 +152,12 @@ class OCRMapResponse(BaseResponse):
     """Response schema for OCR mapping endpoint."""
 
     data: Dict[str, Any] = Field(..., description="Mapped key-value pairs")
+    document_type: Optional[str] = Field(None, description="Detected document type (if auto-mapping was used)")
     processing_time_ms: float = Field(description="Processing time in milliseconds")
+    debug_image_base64: Optional[str] = Field(
+        None,
+        description="Base64-encoded PNG of preprocessed image with OCR bounding boxes (only when debug=true)"
+    )
 
 
 # ============================================================================

@@ -59,33 +59,41 @@ Get service configuration and capabilities.
 
 ### OCR Operations
 
-#### POST `/api/v1/ocr/extract`
+#### POST `/api/v1/ocr/smart-scan`
 
-Extract text from an uploaded image.
+Automatically classify document and extract specific fields or tabular data.
 
 **Request**:
 - Method: `POST`
 - Content-Type: `multipart/form-data`
 - Body:
   - `file` (required): Image file
-  - `lang` (optional): Language code, default `"en"`
+  - `fields` (optional): Comma-separated labels to extract. If empty, auto-classification is used.
+  - `tables` (optional): JSON-encoded table definitions.
+  - `lang` (optional): Language code, default `"id"`
 
 **Example cURL**:
 ```bash
-curl -X POST http://localhost:8000/api/v1/ocr/extract \
+# Auto-classification
+curl -X POST http://localhost:8000/api/v1/ocr/smart-scan \
   -F "file=@document.jpg" \
-  -F "lang=en"
+  -F "lang=id"
+
+# Specific Mapping
+curl -X POST http://localhost:8000/api/v1/ocr/smart-scan \
+  -F "file=@document.jpg" \
+  -F "fields=Nama,NIK"
 ```
 
-**Example Python (requests)**:
+**Example Python (requests)****:
 ```python
 import requests
 
 with open("document.jpg", "rb") as f:
     response = requests.post(
-        "http://localhost:8000/api/v1/ocr/extract",
+        "http://localhost:8000/api/v1/ocr/smart-scan",
         files={"file": f},
-        data={"lang": "en"}
+        data={"lang": "id"}
     )
 result = response.json()
 ```
@@ -95,25 +103,11 @@ result = response.json()
 {
   "success": true,
   "data": {
-    "text": "Full extracted text\nMultiple lines",
-    "confidence": 0.95,
-    "regions": [
-      {
-        "text": "First line",
-        "confidence": 0.98,
-        "bbox": [[10, 10], [200, 10], [200, 30], [10, 30]],
-        "region_id": 1
-      },
-      {
-        "text": "Second line",
-        "confidence": 0.92,
-        "bbox": [[10, 40], [200, 40], [200, 60], [10, 60]],
-        "region_id": 2
-      }
-    ],
-    "region_count": 2,
-    "language": "en"
+    "nama": "JOHN DOE",
+    "nik": "1234567890",
+    "alamat": "JL. CONTOH NO. 1"
   },
+  "document_type": "ktp",
   "processing_time_ms": 245.5
 }
 ```
@@ -138,6 +132,12 @@ result = response.json()
 | `it` | Italian |
 | `portuguese` | Portuguese |
 | `spanish` | Spanish |
+
+---
+
+#### POST `/api/v1/ocr/map` (Legacy Alias)
+
+**Deprecated**: Alias for `/api/v1/ocr/smart-scan`. Maintained for backward compatibility.
 
 ---
 
@@ -313,7 +313,7 @@ import requests
 import os
 from pathlib import Path
 
-API_URL = "http://localhost:8000/api/v1/ocr/extract"
+API_URL = "http://localhost:8000/api/v1/ocr/smart-scan"
 IMAGE_DIR = Path("documents")
 
 for image_path in IMAGE_DIR.glob("*.jpg"):
@@ -341,16 +341,16 @@ import requests
 
 API_URL = "http://localhost:8000"
 
-# Extract text
+# Smart scan
 with open("document.jpg", "rb") as f:
     extract_response = requests.post(
-        f"{API_URL}/api/v1/ocr/extract",
+        f"{API_URL}/api/v1/ocr/smart-scan",
         files={"file": f},
         data={"lang": "id"}
     )
 
 result = extract_response.json()
-print(f"Found {result['data']['region_count']} text regions")
+print(f"Detected document: {result['document_type']}")
 
 # Visualize
 with open("document.jpg", "rb") as f:
@@ -378,7 +378,7 @@ class OCRClient:
         try:
             with open(image_path, "rb") as f:
                 response = requests.post(
-                    f"{self.base_url}/api/v1/ocr/extract",
+                    f"{self.base_url}/api/v1/ocr/smart-scan",
                     files={"file": f},
                     data={"lang": lang},
                     timeout=30
@@ -437,7 +437,7 @@ client = TestClient(app)
 
 with open("test.jpg", "rb") as f:
     response = client.post(
-        "/api/v1/ocr/extract",
+        "/api/v1/ocr/smart-scan",
         files={"file": ("test.jpg", f, "image/jpeg")},
         data={"lang": "en"}
     )
@@ -451,7 +451,7 @@ const formData = new FormData();
 formData.append('file', fileInput.files[0]);
 formData.append('lang', 'en');
 
-fetch('http://localhost:8000/api/v1/ocr/extract', {
+fetch('http://localhost:8000/api/v1/ocr/smart-scan', {
   method: 'POST',
   body: formData
 })

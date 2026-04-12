@@ -62,7 +62,7 @@ class RapidOCRRepository(OCRRepositoryInterface):
             # Initialize RapidOCR
             # RapidOCR automatically handles model downloading and ONNX Runtime provider setup
             self._ocr_engine = RapidOCR(
-                width_height_info={'det_limit_side_len': 960},
+                width_height_info={'det_limit_side_len': 1280},
                 # Additional configuration can be passed here if needed
             )
 

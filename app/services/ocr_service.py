@@ -10,11 +10,13 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 from PIL import Image
 from pydantic import ValidationError
 from rapidfuzz import process, fuzz
 
 from app.core.config import get_settings
+from app.core.templates import DOCUMENT_TEMPLATES
 from app.core.exceptions import (
     FileProcessingError,
     ImageFormatError,
@@ -23,7 +25,8 @@ from app.core.exceptions import (
 )
 from app.models.schemas import BoundingBox, TextRegion, OCRResult
 from app.repositories.base import OCRRepositoryInterface
-from app.repositories.ocr_repository import get_ocr_repository
+from app.repositories.ocr_repository import RapidOCRRepository, get_ocr_repository
+from app.utils.document_processor import DocumentProcessor
 
 settings = get_settings()
 
@@ -42,6 +45,7 @@ class OCRService:
             repository: OCR repository instance (uses singleton if not provided)
         """
         self._repository = repository or get_ocr_repository()
+        self._doc_processor = DocumentProcessor()
 
     async def initialize(self) -> None:
         """Initialize the OCR service.
@@ -86,40 +90,147 @@ class OCRService:
         filename: str,
         fields: List[str],
         tables: Optional[List[Dict[str, Any]]] = None,
-        lang: str = "en",
+        lang: str = "id",
+        auto_preprocess: bool = True
     ) -> Dict[str, Any]:
-        """Extract specific fields and tables from document.
+        """Perform OCR and map extracted text to specific fields or tables.
 
         Args:
-            file_content: Raw file content
+            file_content: Image file content
             filename: Original filename
-            fields: List of label strings for flat fields
-            tables: List of table definitions (name and columns)
-            lang: OCR language code
+            fields: List of labels to look for
+            tables: Optional list of table definitions
+            lang: OCR language
+            auto_preprocess: Whether to automatically deskew and enhance image
 
         Returns:
-            Dictionary with flat fields and extracted tables
+            Mapped data and optional metadata
         """
-        # 1. OCR the image
+        # Preprocess if requested
+        if auto_preprocess:
+            try:
+                file_content = self._doc_processor.auto_preprocess(file_content)
+            except Exception:
+                # Fallback to original if preprocessing fails
+                pass
+
+        # Run OCR first
         ocr_result = await self.extract_text_from_file(file_content, filename, lang)
         regions = ocr_result.get("regions", [])
+        
+        document_type = None
+        
+        # If no fields provided, try auto-classification
+        if not fields and not tables:
+            document_type = self.classify_document(regions)
+            if document_type:
+                template = DOCUMENT_TEMPLATES[document_type]
+                fields = template.get("fields", [])
+                tables = template.get("tables", [])
 
-        if not regions:
-            results = {re.sub(r'[^a-zA-Z0-9]', '_', f).lower().strip('_'): None for f in fields}
-            if tables:
-                for t in tables:
-                    results[t["name"]] = []
-            return results
+        # Extract extra labels and exclude patterns from template
+        extra_labels = []
+        exclude_patterns = []
+        mapping_strategy = "default"
+        if document_type:
+            template = DOCUMENT_TEMPLATES[document_type]
+            extra_labels = template.get("extra_labels", [])
+            exclude_patterns = template.get("exclude_value_patterns", [])
+            mapping_strategy = template.get("mapping_strategy", "default")
 
-        # 2. Extract flat fields
-        results = self._perform_mapping(regions, fields)
+        # Apply post-OCR coordinate skew correction (does NOT modify image)
+        # This makes label-value spatial heuristics work for tilted photos
+        if auto_preprocess and regions:
+            try:
+                skew_angle = self._doc_processor.get_skew_angle_from_regions(regions)
+                if abs(skew_angle) > 1.0:  # Only correct if clearly tilted
+                    # Get image dimensions for rotation center
+                    import io as _io
+                    from PIL import Image as _PILImage
+                    _im = _PILImage.open(_io.BytesIO(file_content))
+                    img_w, img_h = _im.size
+                    regions = self._doc_processor.rotate_regions(regions, skew_angle, img_w, img_h)
+            except Exception:
+                pass  # Fallback: no skew correction
 
-        # 3. Extract tables if requested
+        if mapping_strategy == "sequential":
+            mapped_data = self._perform_sequential_mapping(regions, fields, document_type)
+        else:
+            mapped_data = self._perform_mapping(regions, fields, extra_labels)
+
+        # Perform table mapping if requested
         if tables:
             table_results = self._extract_tables(regions, tables)
-            results.update(table_results)
+            mapped_data.update(table_results)
 
-        return results
+        # Add document type if detected
+        if document_type:
+            mapped_data["_document_type"] = document_type
+
+        # Post-process and format values
+        for key, val in mapped_data.items():
+            if isinstance(val, str):
+                # Apply template-level exclusion patterns first
+                for pattern in exclude_patterns:
+                    val = re.sub(pattern, '', val, flags=re.IGNORECASE).strip()
+                # Strip leftover separators/punctuation after pattern removal
+                val = re.sub(r'^[,\s]+|[,\s]+$', '', val).strip()
+                mapped_data[key] = self._format_value(key, val) if val else None
+
+        return mapped_data
+
+    def classify_document(self, regions: List[Dict[str, Any]]) -> Optional[str]:
+        """Classify document type based on anchor keywords in regions.
+
+        Strategy:
+        1. First check exclusive_anchors - if matched, immediately return that type.
+           This handles cases like KK ('KARTU KELUARGA') vs KTP who share many words.
+        2. Fall back to scoring all anchors and returning highest match count.
+
+        Args:
+            regions: List of detected text regions
+
+        Returns:
+            Detected document type key (e.g., 'ktp', 'kk') or None
+        """
+        if not regions:
+            return None
+
+        all_texts = " ".join(r["text"] for r in regions).lower()
+
+        def normalize(t: str) -> str:
+            return re.sub(r'[^a-zA-Z0-9]', '', t).lower().strip()
+
+        normalized_texts = [normalize(r["text"]) for r in regions]
+
+        # 1. EXCLUSIVE anchor check — highest priority, first match wins
+        for doc_type, template in DOCUMENT_TEMPLATES.items():
+            for anchor in template.get("exclusive_anchors", []):
+                if anchor.lower() in all_texts:
+                    return doc_type
+
+        # 2. Fuzzy scoring across all anchors
+        best_type = None
+        max_matches = 0
+
+        for doc_type, template in DOCUMENT_TEMPLATES.items():
+            anchors = template.get("anchors", [])
+            match_count = 0
+
+            for anchor in anchors:
+                norm_anchor = normalize(anchor)
+                if not norm_anchor:
+                    continue
+
+                matches = process.extractOne(norm_anchor, normalized_texts, scorer=fuzz.ratio)
+                if matches and matches[1] >= 85:
+                    match_count += 1
+
+            if match_count > 0 and match_count >= max_matches:
+                max_matches = match_count
+                best_type = doc_type
+
+        return best_type
 
     def _extract_tables(self, regions: List[Dict[str, Any]], table_definitions: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Extract tabular data based on column headers."""
@@ -223,15 +334,18 @@ class OCRService:
                     
         return table_results
 
-    def _perform_mapping(self, regions: List[Dict[str, Any]], target_labels: List[str]) -> Dict[str, Any]:
+    def _perform_mapping(self, regions: List[Dict[str, Any]], target_labels: List[str], extra_exclude_labels: List[str] = None) -> Dict[str, Any]:
         """Perform spatial mapping of labels to values.
 
         Heuristics:
         - Labels are matched using fuzzy matching (RapidFuzz).
         - Values are expected to be either to the right of or below the label.
         - Common delimiters (:, =, -) are stripped.
+        - extra_exclude_labels: Additional labels (e.g. "Gol. Darah") whose regions
+          should be excluded from value matching but not output as fields.
         """
         results = {}
+        extra_exclude_labels = extra_exclude_labels or []
 
         def normalize(t: str) -> str:
             """Normalize text for better matching."""
@@ -254,22 +368,25 @@ class OCRService:
         label_region_indices = set()
         normalized_region_texts = [normalize(r["text"]) for r in regions]
         
-        # 1. First pass: find all label regions
-        active_mappings = [] # List of (clean_key, label, label_region, match_idx)
+        # 1. First pass: find all label regions (target + extra exclusion labels)
+        active_mappings = []  # List of (clean_key, label, label_region, match_idx)
+        all_labels_to_find = [(l, True) for l in target_labels] + [(l, False) for l in extra_exclude_labels]
         
-        for label in target_labels:
-            clean_key = re.sub(r'[^a-zA-Z0-9]', '_', label).lower().strip('_')
-            results[clean_key] = None
-            
+        for label, is_target in all_labels_to_find:
             norm_label = normalize(label)
             if not norm_label: continue
             
+            if is_target:
+                clean_key = re.sub(r'[^a-zA-Z0-9]', '_', label).lower().strip('_')
+                results[clean_key] = None
+
             matches = process.extractOne(norm_label, normalized_region_texts, scorer=fuzz.WRatio)
             if matches and matches[1] >= 75:
                 match_idx = matches[2]
                 label_region = regions[match_idx]
                 label_region_indices.add(match_idx)
-                active_mappings.append((clean_key, label, label_region, match_idx))
+                if is_target:
+                    active_mappings.append((clean_key, label, label_region, match_idx))
 
         # 2. Second pass: find values for each identified label
         for clean_key, label, label_region, match_idx in active_mappings:
@@ -287,36 +404,214 @@ class OCRService:
                 if i in label_region_indices: # Skip any region that was identified as a label
                     continue
                 
-                # Skip delimiter-only regions
-                if re.fullmatch(r'[:=\-\s\.]+ \d*', r["text"]) or not normalize(r["text"]):
+                # Skip regions that are empty or contain ONLY delimiters and no alphanumeric content
+                if not normalize(r["text"]):
                     continue
 
                 # HEURISTIC A: Same line (horizontal), to the right
+                # Strict vertical tolerance (0.8x height) to avoid bleeding into next row
                 v_dist = abs(r["_center_y"] - label_region["_center_y"])
                 h_dist = r["_min_x"] - label_region["_max_x"]
                 
-                if v_dist < label_region["_height"] * 0.8 and 0 < h_dist < label_region["_width"] * 5:
+                if v_dist < label_region["_height"] * 0.8 and 0 < h_dist < label_region["_width"] * 3.0:
                     # Give a bonus to horizontal (lower distance equivalent)
                     potential_values.append((r, h_dist, "horizontal"))
 
                 # HEURISTIC B: Directly below (vertical)
-                elif abs(r["_center_x"] - label_region["_center_x"]) < label_region["_width"] * 0.6:
+                elif abs(r["_center_x"] - label_region["_center_x"]) < label_region["_width"] * 0.7:
                     v_gap = r["_min_y"] - label_region["_max_y"]
                     if 0 < v_gap < label_region["_height"] * 2.0:
                         # Apply a penalty to vertical distance to prioritize horizontal same-line values
                         potential_values.append((r, v_gap * 3, "vertical"))
 
             if potential_values:
-                # Sort by effective distance
+                # 1. Sort by effective distance
                 potential_values.sort(key=lambda x: x[1])
-                best_val_region = potential_values[0][0]
-                val_text = best_val_region["text"]
                 
-                # Cleanup: remove leading colons/symbols
-                val_text = re.sub(r'^[:=\- ]+', '', val_text).strip()
+                # 2. Heuristic: If horizontal, collect ALL regions on the same line to the right
+                if potential_values[0][2] == "horizontal":
+                    line_regions = []
+                    label_y = label_region["_center_y"]
+                    label_h = label_region["_height"]
+                    
+                    # Sort by X first so we process left-to-right
+                    horizontal_regions = [(r, dist) for r, dist, strategy in potential_values if strategy == "horizontal" and abs(r["_center_y"] - label_y) < label_h * 0.8]
+                    horizontal_regions.sort(key=lambda x: x[0]["_min_x"])
+                    
+                    for r, dist in horizontal_regions:
+                        # Gap threshold: based on previous joining region's width (not label width)
+                        # This prevents absorbing Gol.Darah which is far to the right
+                        if not line_regions:
+                            line_regions.append(r)
+                        else:
+                            prev = line_regions[-1]
+                            gap = r["_min_x"] - prev["_max_x"]
+                            max_gap = max(prev["_width"] * 0.8, label_region["_height"] * 2.0)
+                            if gap < max_gap:
+                                line_regions.append(r)
+                            else:
+                                break  # Large gap = separate element (e.g. blood type / photo area)
+                    
+                    # Sort by X to ensure correct order
+                    line_regions.sort(key=lambda x: x["_min_x"])
+                    val_text = " ".join([r["text"] for r in line_regions])
+                else:
+                    # For vertical, just take the closest one for now
+                    best_val_region = potential_values[0][0]
+                    val_text = best_val_region["text"]
+                
+                # Cleanup: remove leading colons/symbols (including full-width equivalents)
+                val_text = re.sub(r'^[:：=＝\-\－\.． ]+', '', val_text).strip()
                 results[clean_key] = val_text if len(val_text) > 0 else None
 
         return results
+
+    def _perform_sequential_mapping(self, regions: List[Dict[str, Any]], fields: List[str], doc_type: str) -> Dict[str, Any]:
+        """Map fields based on vertical sequence below a primary anchor.
+        
+        Used for documents like BPJS TK that have no labels but a fixed vertical layout.
+        """
+        results = {re.sub(r'[^a-zA-Z0-9]', '_', f).lower().strip('_'): None for f in fields}
+        
+        # 0. Prep spatial metadata
+        for r in regions:
+            bbox = r["bbox"]
+            xs = [p[0] for p in bbox]
+            ys = [p[1] for p in bbox]
+            r["_min_x"], r["_max_x"] = min(xs), max(xs)
+            r["_min_y"], r["_max_y"] = min(ys), max(ys)
+            r["_center_x"] = (r["_min_x"] + r["_max_x"]) / 2
+            r["_center_y"] = (r["_min_y"] + r["_max_y"]) / 2
+            r["_height"] = r["_max_y"] - r["_min_y"]
+            r["_width"] = r["_max_x"] - r["_min_x"]
+
+        # 1. Find the primary anchor
+        template = DOCUMENT_TEMPLATES.get(doc_type, {})
+        anchors = template.get("anchors", [])
+        primary_anchor_region = None
+        
+        for r in regions:
+            for anchor in anchors:
+                if anchor.lower() in r["text"].lower():
+                    primary_anchor_region = r
+                    break
+            if primary_anchor_region: break
+            
+        if not primary_anchor_region:
+            return results
+
+        # 2. Find all regions below the anchor
+        below_regions = []
+        anchor_bottom = primary_anchor_region["_max_y"]
+        
+        for r in regions:
+            if r["_min_y"] > anchor_bottom and r != primary_anchor_region:
+                # Filter out regions that are too far right (likely QR codes)
+                if r["_center_x"] < primary_anchor_region["_max_x"] * 1.5:
+                    below_regions.append(r)
+        
+        # 3. Group regions into lines
+        lines = []
+        if not below_regions:
+            return results
+            
+        sorted_below = sorted(below_regions, key=lambda x: x["_center_y"])
+        current_line = [sorted_below[0]]
+        
+        for i in range(1, len(sorted_below)):
+            r = sorted_below[i]
+            prev_r = current_line[-1]
+            if abs(r["_center_y"] - prev_r["_center_y"]) < (r["_height"] * 0.7):
+                current_line.append(r)
+            else:
+                lines.append(" ".join([x["text"] for x in sorted(current_line, key=lambda x: x["_min_x"])]))
+                current_line = [r]
+        lines.append(" ".join([x["text"] for x in sorted(current_line, key=lambda x: x["_min_x"])]))
+        
+        # 4. Map lines to fields sequentially
+        field_keys = [re.sub(r'[^a-zA-Z0-9]', '_', f).lower().strip('_') for f in fields]
+        
+        for i, val in enumerate(lines):
+            if i < len(field_keys):
+                results[field_keys[i]] = val
+                
+        return results
+
+    def _format_value(self, key: str, value: str) -> str:
+        """Apply formatting rules based on field key."""
+        if not value:
+            return value
+
+        # 1. Normalize spaces
+        value = re.sub(r'\s+', ' ', value).strip()
+
+        # 2. Key-specific formatting
+        low_key = key.lower()
+        
+        # Preserve NIK as uppercase
+        if "nik" in low_key:
+            return value.upper()
+
+        # Title Case for name-related and other descriptive fields
+        # Matches: nama, pekerjaan, alamat, agama, status, etc.
+        name_patterns = ["nama", "kepala_keluarga", "lengkap", "tempat", "pekerjaan", "agama", "status", "alamat", "kewarganegaraan", "faskes", "jenis_kelamin", "kelurahan", "kecamatan", "desa"]
+        if any(p in low_key for p in name_patterns):
+            # Only apply title case if it's currently uppercase or looks like raw OCR noise
+            # or if it's a multi-word string that is mostly lowercase/mixed
+            if value.isupper() or len(value.split()) >= 1:
+                return value.title()
+
+        return value
+
+    async def generate_debug_image(
+        self, file_content: bytes, filename: str, lang: str = "id"
+    ) -> Optional[str]:
+        """Generate a debug image with preprocessing applied and OCR bounding boxes drawn.
+
+        Returns:
+            Base64-encoded PNG string, or None if generation fails.
+        """
+        import base64
+        import cv2 as _cv2
+        import numpy as _np
+
+        try:
+            # Apply preprocessing (same as smart-scan)
+            preprocessed = file_content
+            try:
+                preprocessed = self._doc_processor.auto_preprocess(file_content)
+            except Exception:
+                pass
+
+            # Run OCR on preprocessed image
+            ocr_result = await self.extract_text_from_file(preprocessed, filename, lang)
+            regions = ocr_result.get("regions", [])
+
+            # Load preprocessed image for drawing
+            nparr = _np.frombuffer(preprocessed, _np.uint8)
+            img = _cv2.imdecode(nparr, _cv2.IMREAD_COLOR)
+            if img is None:
+                return None
+
+            # Draw bounding boxes and label text
+            for r in regions:
+                bbox = r.get("bbox", [])
+                text = r.get("text", "")
+                if len(bbox) < 4:
+                    continue
+
+                pts = _np.array(bbox, _np.int32).reshape((-1, 1, 2))
+                _cv2.polylines(img, [pts], isClosed=True, color=(0, 200, 80), thickness=2)
+                # Draw text label above the box
+                x, y = int(bbox[0][0]), max(int(bbox[0][1]) - 4, 12)
+                _cv2.putText(img, text[:40], (x, y), _cv2.FONT_HERSHEY_SIMPLEX,
+                             0.45, (0, 100, 255), 1, _cv2.LINE_AA)
+
+            _, buf = _cv2.imencode(".png", img)
+            return base64.b64encode(buf.tobytes()).decode("utf-8")
+
+        except Exception:
+            return None
 
     async def visualize_file(
         self, file_content: bytes, filename: str
