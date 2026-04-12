@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.main import app, get_settings
-from app.repositories.ocr_repository import PaddleOCRRepository
+from app.repositories.ocr_repository import RapidOCRRepository
 from app.services.ocr_service import get_ocr_service
 
 
@@ -107,7 +107,7 @@ def mock_ocr_repository(mock_ocr_result):
     Returns:
         Mocked OCR repository
     """
-    repo = Mock(spec=PaddleOCRRepository)
+    repo = Mock(spec=RapidOCRRepository)
 
     # Mock extract_text
     async def mock_extract(image, lang="en"):

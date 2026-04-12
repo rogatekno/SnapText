@@ -184,7 +184,8 @@ async def visualize(
 )
 async def map_fields(
     file: UploadFile = File(..., description="Image file to process"),
-    fields: str = Form(..., description="Comma-separated labels (e.g., 'Nama, NIK')"),
+    fields: str = Form(default="", description="Comma-separated labels (e.g., 'Nama, NIK')"),
+    tables: Optional[str] = Form(None, description="JSON-encoded list of table definitions"),
     lang: str = Form(
         default="en",
         description="OCR language code",
@@ -207,11 +208,22 @@ async def map_fields(
     # Parse field list from form string
     try:
         import json
-        field_list = json.loads(fields)
+        field_list = json.loads(fields) if fields else []
         if not isinstance(field_list, list):
             field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
     except (json.JSONDecodeError, TypeError):
         field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
+
+    # Parse table definitions
+    table_definitions = None
+    if tables:
+        try:
+            import json
+            table_definitions = json.loads(tables)
+        except (json.JSONDecodeError, TypeError):
+            # If invalid JSON, treat as error or ignore? 
+            # For now, let's ignore or handle in service
+            pass
 
     try:
         # Read file content
@@ -222,6 +234,7 @@ async def map_fields(
             file_content=file_content,
             filename=file.filename or "unknown",
             fields=field_list,
+            tables=table_definitions,
             lang=lang,
         )
 

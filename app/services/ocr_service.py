@@ -81,30 +81,147 @@ class OCRService:
         return result
 
     async def map_text_from_file(
-        self, file_content: bytes, filename: str, fields: List[str], lang: str = "en"
+        self,
+        file_content: bytes,
+        filename: str,
+        fields: List[str],
+        tables: Optional[List[Dict[str, Any]]] = None,
+        lang: str = "en",
     ) -> Dict[str, Any]:
-        """Extract specific fields from document based on labels.
+        """Extract specific fields and tables from document.
 
         Args:
             file_content: Raw file content
             filename: Original filename
-            fields: List of label strings to look for
+            fields: List of label strings for flat fields
+            tables: List of table definitions (name and columns)
             lang: OCR language code
 
         Returns:
-            Dictionary of mapped fields and their values
+            Dictionary with flat fields and extracted tables
         """
-        # 1. OCR the image to get all regions
+        # 1. OCR the image
         ocr_result = await self.extract_text_from_file(file_content, filename, lang)
         regions = ocr_result.get("regions", [])
 
         if not regions:
-            return {re.sub(r'[^a-zA-Z0-9]', '_', f).lower().strip('_'): None for f in fields}
+            results = {re.sub(r'[^a-zA-Z0-9]', '_', f).lower().strip('_'): None for f in fields}
+            if tables:
+                for t in tables:
+                    results[t["name"]] = []
+            return results
 
-        # 2. Perform mapping based on spatial heuristics
-        mapped_data = self._perform_mapping(regions, fields)
+        # 2. Extract flat fields
+        results = self._perform_mapping(regions, fields)
 
-        return mapped_data
+        # 3. Extract tables if requested
+        if tables:
+            table_results = self._extract_tables(regions, tables)
+            results.update(table_results)
+
+        return results
+
+    def _extract_tables(self, regions: List[Dict[str, Any]], table_definitions: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """Extract tabular data based on column headers."""
+        from rapidfuzz import process, fuzz
+        import re
+
+        table_results = {}
+
+        # 1. Group all regions into horizontal lines based on Y-overlap
+        lines = []
+        sorted_regions = sorted(regions, key=lambda x: x["_center_y"])
+        
+        if not sorted_regions:
+            return {t["name"]: [] for t in table_definitions}
+
+        current_line = [sorted_regions[0]]
+        for i in range(1, len(sorted_regions)):
+            r = sorted_regions[i]
+            prev_r = current_line[-1]
+            
+            # If Y distance between centers is small enough, it's the same line
+            # Threshold: 50% of average region height
+            if abs(r["_center_y"] - prev_r["_center_y"]) < (r["_height"] * 0.5):
+                current_line.append(r)
+            else:
+                lines.append(sorted(current_line, key=lambda x: x["_min_x"]))
+                current_line = [r]
+        lines.append(sorted(current_line, key=lambda x: x["_min_x"]))
+
+        for table_def in table_definitions:
+            name = table_def["name"]
+            columns = table_def["columns"]
+            table_results[name] = []
+            
+            # slugify column names for output keys
+            col_keys = {col: re.sub(r'[^a-zA-Z0-9]', '_', col).lower().strip('_') for col in columns}
+            
+            # Find the header row
+            header_line_idx = -1
+            col_x_map = {} # maps col_name -> (min_x, max_x)
+            
+            for l_idx, line in enumerate(lines):
+                line_text = " ".join([r["text"] for r in line])
+                found_cols = 0
+                temp_map = {}
+                
+                for col in columns:
+                    match = process.extractOne(col, [r["text"] for r in line], scorer=fuzz.WRatio)
+                    if match and match[1] > 75:
+                        found_cols += 1
+                        matched_region = line[match[2]]
+                        temp_map[col] = (matched_region["_min_x"], matched_region["_max_x"])
+                
+                # If majority of columns found, assume this is the header row
+                if found_cols >= len(columns) * 0.6:
+                    header_line_idx = l_idx
+                    col_x_map = temp_map
+                    break
+            
+            if header_line_idx == -1:
+                continue
+
+            # Process rows below header
+            for i in range(header_line_idx + 1, len(lines)):
+                line = lines[i]
+                row_data = {col_keys[col]: None for col in columns}
+                has_any_data = False
+                
+                for r in line:
+                    # Assign region to a column based on X-center proximity
+                    best_col = None
+                    min_dist = float('inf')
+                    
+                    for col, (c_min_x, c_max_x) in col_x_map.items():
+                        # If region is within column bounds or very close to center
+                        c_center = (c_min_x + c_max_x) / 2
+                        dist = abs(r["_center_x"] - c_center)
+                        
+                        # Tolerance: 0.5 * column width or explicit overlap
+                        if (c_min_x - r["_width"]*0.5 <= r["_center_x"] <= c_max_x + r["_width"]*0.5) or dist < (c_max_x - c_min_x):
+                           if dist < min_dist:
+                               min_dist = dist
+                               best_col = col
+                    
+                    if best_col:
+                        key = col_keys[best_col]
+                        if row_data[key]:
+                            row_data[key] += " " + r["text"]
+                        else:
+                            row_data[key] = r["text"]
+                        has_any_data = True
+                
+                if has_any_data:
+                    # Cleanup row data
+                    for k, v in row_data.items():
+                        if v:
+                            row_data[k] = re.sub(r'^[:=\- ]+', '', v).strip()
+                            if row_data[k] == "-": row_data[k] = None
+                    
+                    table_results[name].append(row_data)
+                    
+        return table_results
 
     def _perform_mapping(self, regions: List[Dict[str, Any]], target_labels: List[str]) -> Dict[str, Any]:
         """Perform spatial mapping of labels to values.
@@ -115,6 +232,10 @@ class OCRService:
         - Common delimiters (:, =, -) are stripped.
         """
         results = {}
+
+        def normalize(t: str) -> str:
+            """Normalize text for better matching."""
+            return re.sub(r'[^a-zA-Z0-9]', '', t).lower().strip()
 
         # Augment regions with spatial metadata for easier searching
         for r in regions:
@@ -129,52 +250,64 @@ class OCRService:
             r["_height"] = r["_max_y"] - r["_min_y"]
             r["_width"] = r["_max_x"] - r["_min_x"]
 
-        region_texts = [r["text"] for r in regions]
-
+        # 0. Identify all possible label matches first to exclude them from values
+        label_region_indices = set()
+        normalized_region_texts = [normalize(r["text"]) for r in regions]
+        
+        # 1. First pass: find all label regions
+        active_mappings = [] # List of (clean_key, label, label_region, match_idx)
+        
         for label in target_labels:
-            # Create a slugified key for the response
             clean_key = re.sub(r'[^a-zA-Z0-9]', '_', label).lower().strip('_')
             results[clean_key] = None
+            
+            norm_label = normalize(label)
+            if not norm_label: continue
+            
+            matches = process.extractOne(norm_label, normalized_region_texts, scorer=fuzz.WRatio)
+            if matches and matches[1] >= 75:
+                match_idx = matches[2]
+                label_region = regions[match_idx]
+                label_region_indices.add(match_idx)
+                active_mappings.append((clean_key, label, label_region, match_idx))
 
-            # Find best match for label using fuzzy matching
-            # threshold 80 is usually safe for OCR errors
-            matches = process.extractOne(label, region_texts, scorer=fuzz.WRatio)
-            if not matches or matches[1] < 70:
-                continue
-
-            best_match_text, score, match_idx = matches
-            label_region = regions[match_idx]
-
-            # Try to see if the value is already in the same region (e.g., "Nama: John")
-            # If label is in Indonesian, it might contain ":"
+        # 2. Second pass: find values for each identified label
+        for clean_key, label, label_region, match_idx in active_mappings:
+            best_match_text = label_region["text"]
+            
+            # Try same-region value (e.g. "Nama: John")
             label_parts = re.split(r'[:=]', best_match_text, 1)
             if len(label_parts) > 1 and len(label_parts[1].strip()) > 1:
                 results[clean_key] = label_parts[1].strip()
                 continue
 
-            # Look for values in other regions based on proximity
+            # Look for values in other regions
             potential_values = []
             for i, r in enumerate(regions):
-                if i == match_idx:
+                if i in label_region_indices: # Skip any region that was identified as a label
+                    continue
+                
+                # Skip delimiter-only regions
+                if re.fullmatch(r'[:=\-\s\.]+ \d*', r["text"]) or not normalize(r["text"]):
                     continue
 
                 # HEURISTIC A: Same line (horizontal), to the right
-                # Vertical centers should be close, and r should be after label_region
                 v_dist = abs(r["_center_y"] - label_region["_center_y"])
                 h_dist = r["_min_x"] - label_region["_max_x"]
                 
-                if v_dist < label_region["_height"] * 0.7 and 0 < h_dist < label_region["_width"] * 3:
+                if v_dist < label_region["_height"] * 0.8 and 0 < h_dist < label_region["_width"] * 5:
+                    # Give a bonus to horizontal (lower distance equivalent)
                     potential_values.append((r, h_dist, "horizontal"))
 
                 # HEURISTIC B: Directly below (vertical)
-                # Horizontal centers should be close, and r should be below label_region
-                elif abs(r["_center_x"] - label_region["_center_x"]) < label_region["_width"] * 0.4:
+                elif abs(r["_center_x"] - label_region["_center_x"]) < label_region["_width"] * 0.6:
                     v_gap = r["_min_y"] - label_region["_max_y"]
-                    if 0 < v_gap < label_region["_height"] * 1.5:
-                        potential_values.append((r, v_gap, "vertical"))
+                    if 0 < v_gap < label_region["_height"] * 2.0:
+                        # Apply a penalty to vertical distance to prioritize horizontal same-line values
+                        potential_values.append((r, v_gap * 3, "vertical"))
 
             if potential_values:
-                # Sort by distance
+                # Sort by effective distance
                 potential_values.sort(key=lambda x: x[1])
                 best_val_region = potential_values[0][0]
                 val_text = best_val_region["text"]

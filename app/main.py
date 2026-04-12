@@ -152,7 +152,7 @@ This project is licensed under the **MIT License** - Free to use, modify, and di
 
     app.include_router(
         ocr.router,
-        prefix=settings.api_v1_prefix,
+        prefix=f"{settings.api_v1_prefix}/ocr",
         tags=["ocr"],
     )
 
