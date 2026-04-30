@@ -103,13 +103,27 @@ services:
         max-size: "10m"
         max-file: "3"
 
+    expose:
+      - 8000
+    networks:
+      - coolify
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.snaptext-ocr.rule=Host(`snaptext.rogatekno.my.id`)"
+      - "traefik.http.routers.snaptext-ocr.entrypoints=websecure"
+      - "traefik.http.routers.snaptext-ocr.tls=true"
+      - "traefik.http.routers.snaptext-ocr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.snaptext-ocr.loadbalancer.server.port=8000"
+
 # Named volumes
 volumes:
   ocr-cache:
     driver: local
 
-# Optional: Network configuration
+# Network configuration
 networks:
+  coolify:
+    external: true
   default:
-    name: snaptext-network
     driver: bridge
