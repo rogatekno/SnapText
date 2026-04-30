@@ -247,3 +247,24 @@ class BatchOCRResponse(BaseResponse):
     successful: int = Field(description="Number of successful processes")
     failed: int = Field(description="Number of failed processes")
     results: List[BatchOCRItem] = Field(description="Individual results")
+
+
+# ============================================================================
+# Async Task Schemas
+# ============================================================================
+
+
+class AsyncJobResponse(BaseResponse):
+    """Response schema for initiating an async OCR job."""
+
+    job_id: str = Field(..., description="Unique identifier for the async job")
+
+
+class JobStatusResponse(BaseResponse):
+    """Response schema for checking async job status."""
+
+    job_id: str = Field(..., description="Unique identifier for the async job")
+    status: str = Field(..., description="Current status (PENDING, STARTED, SUCCESS, FAILURE)")
+    result: Optional[Dict[str, Any]] = Field(None, description="Job result if successful")
+    error: Optional[str] = Field(None, description="Error message if failed")
+    processing_time_ms: Optional[float] = Field(None, description="Total processing time in ms")

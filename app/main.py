@@ -63,10 +63,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         except Exception as e:
             logger.error(f"Background Warmup Failed: {str(e)}")
 
+    # Initialize Taskiq Broker
+    from app.core.broker import broker
+    if not broker.is_worker_process:
+        await broker.startup()
+
     # Start the task without waiting
     asyncio.create_task(background_warmup())
 
     yield
+
+    # Shutdown Taskiq Broker
+    if not broker.is_worker_process:
+        await broker.shutdown()
 
     # Shutdown
     logger.info("Shutting down application...")

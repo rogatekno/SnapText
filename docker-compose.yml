@@ -65,6 +65,7 @@ services:
       - XLAN_ENABLE=0
       - FLAGS_cudnn_frontend_ops=False
       - FLAGS_use_cublas_tensorop_math=false
+      - REDIS_URL=redis://154.26.129.168:6379/0
 
     # Resource limits (INCREASED for PaddleOCR + LLM - minimum 4GB recommended)
     deploy:
@@ -115,6 +116,38 @@ services:
       - "traefik.http.routers.snaptext-ocr.tls=true"
       - "traefik.http.routers.snaptext-ocr.tls.certresolver=letsencrypt"
       - "traefik.http.services.snaptext-ocr.loadbalancer.server.port=8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: snaptext-ocr:latest
+    container_name: snaptext-worker
+    # Command to run taskiq worker
+    command: python3 -m taskiq worker app.core.broker:broker --fs-startup
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://154.26.129.168:6379/0
+      - OCR_LANG=id
+      - LLM_ENABLED=true
+      - LLM_MODEL_REPO=${LLM_MODEL_REPO:-Qwen/Qwen2.5-0.5B-Instruct-GGUF}
+      - LLM_MODEL_FILE=${LLM_MODEL_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      - LLM_MODEL_PATH=/app/models/${LLM_MODEL_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      - LLM_N_THREADS=2
+      - INFERENCE_ENFORCE_USE_ONEDNN=0
+      - FLAGS_use_mkldnn=false
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ocr-cache:/tmp/ocr_cache
+    restart: unless-stopped
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3G
 
 # Named volumes
 volumes:

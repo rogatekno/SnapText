@@ -18,6 +18,9 @@ from app.models.schemas import (
 )
 from app.core.logging import get_logger
 from app.services.ocr_service import get_ocr_service
+from app.models.schemas import AsyncJobResponse, JobStatusResponse
+from app.tasks.ocr_tasks import process_ocr_task
+from app.core.broker import broker
 
 settings = get_settings()
 logger = get_logger("ocr_api")
@@ -187,3 +190,90 @@ async def get_info():
             "focus_document": "KTP (Indonesian ID Card)"
         },
     }
+
+
+@router.post(
+    "/scan/async",
+    response_model=AsyncJobResponse,
+    summary="Scan Document Asynchronously",
+    description="Submit an OCR job and receive a Job ID immediately. Process runs in the background.",
+)
+async def scan_document_async(
+    file: UploadFile = File(..., description="Image file to process"),
+    lang: str = Form(default="id", description="OCR language code"),
+):
+    """Initiate an asynchronous OCR scan job."""
+    file_content = await file.read()
+    
+    # Send task to worker
+    task = await process_ocr_task.kiq(
+        file_content=file_content,
+        filename=file.filename or "unknown",
+        lang=lang
+    )
+    
+    return AsyncJobResponse(
+        success=True,
+        message="OCR task submitted successfully",
+        job_id=task.task_id
+    )
+
+
+@router.get(
+    "/scan/status/{job_id}",
+    response_model=JobStatusResponse,
+    summary="Check Async Job Status",
+    description="Check the status and get results of an asynchronous OCR job.",
+)
+async def get_scan_status(job_id: str):
+    """Get the status and result of an async OCR task."""
+    # Get result from backend
+    result_backend = broker.result_backend
+    if not result_backend:
+        return JobStatusResponse(
+            success=False,
+            job_id=job_id,
+            status="FAILURE",
+            error="Result backend not configured"
+        )
+
+    # Check status
+    is_ready = await result_backend.is_result_ready(job_id)
+    if not is_ready:
+        return JobStatusResponse(
+            success=True,
+            job_id=job_id,
+            status="PENDING",
+            message="Task is still processing"
+        )
+
+    # Get the actual result
+    task_result = await result_backend.get_result(job_id)
+    
+    if task_result.is_err:
+        return JobStatusResponse(
+            success=False,
+            job_id=job_id,
+            status="FAILURE",
+            error="Task failed during execution"
+        )
+
+    data = task_result.return_value
+    
+    # Check if internal processing failed
+    if isinstance(data, dict) and not data.get("success", True):
+        return JobStatusResponse(
+            success=False,
+            job_id=job_id,
+            status="FAILURE",
+            error=data.get("error", "Unknown internal error"),
+            result=data
+        )
+
+    return JobStatusResponse(
+        success=True,
+        job_id=job_id,
+        status="SUCCESS",
+        result=data,
+        processing_time_ms=data.get("_processing_time_ms") if isinstance(data, dict) else None
+    )
