@@ -60,17 +60,25 @@ class LLMExtractionEngine(ExtractionStrategy):
                 logger.info(f"LLM model not found at {model_path}. Attempting to download {filename} from {repo_id}...")
                 try:
                     from huggingface_hub import hf_hub_download
+                    import shutil
+
+                    # Download to cache first (guaranteed writeable)
                     downloaded_path = hf_hub_download(
                         repo_id=repo_id,
                         filename=filename,
-                        local_dir=os.path.dirname(model_path),
-                        local_dir_use_symlinks=False,
                         cache_dir="/tmp/huggingface_cache"
                     )
-                    # If the download path is different from our expected path, rename it
-                    if os.path.abspath(downloaded_path) != os.path.abspath(model_path):
-                        os.rename(downloaded_path, model_path)
-                    logger.info(f"Model downloaded successfully to {model_path}")
+                    
+                    # Try to move it to the final destination
+                    try:
+                        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+                        shutil.copy2(downloaded_path, model_path)
+                        logger.info(f"Model persisted to {model_path}")
+                    except Exception as persist_error:
+                        logger.warning(f"Could not persist model to {model_path}: {persist_error}. Using cached version instead.")
+                        model_path = downloaded_path
+                        
+                    logger.info(f"Model ready at: {model_path}")
                 except Exception as e:
                     logger.error(f"Failed to download model from Hugging Face: {e}")
                     return

@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for SnapText OCR Service
-# Optimized for Ultra-Fast Build and CPU Performance
+# Optimized for Ultra-Fast Build and Automatic Permission Handling
 
 # Stage 1: Builder
 FROM python:3.11-slim-bookworm AS builder
@@ -8,7 +8,6 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
-# Build dependencies (minimal for wheels)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -16,9 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-# 1. Install llama-cpp-python FIRST from pre-built wheels
-# This is the most time-consuming part if compiled. 
-# We use the CPU-only wheel index for Python 3.11
+# 1. Install llama-cpp-python from wheels
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --prefix=/install "llama-cpp-python>=0.3.0" \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
@@ -44,21 +41,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Non-root user and permission setup
-RUN useradd -m -u 1000 -s /bin/bash app && \
-    mkdir -p /app/logs /app/models /tmp/ocr_cache /tmp/huggingface_cache && \
-    chown -R app:app /app /tmp/ocr_cache /tmp/huggingface_cache
+# Create app user
+RUN useradd -m -u 1000 -s /bin/bash app
 
 # Copy packages from builder
 COPY --from=builder /install /usr/local
 
 # Copy application code
-COPY --chown=app:app . .
+COPY . .
 
-USER app
-EXPOSE 8000
+# Setup entrypoint script for automatic permission handling
+RUN chmod +x scripts/entrypoint.sh
+ENTRYPOINT ["/bin/bash", "scripts/entrypoint.sh"]
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
-
+# Default command (passed to entrypoint.sh)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
