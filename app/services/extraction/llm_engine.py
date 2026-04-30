@@ -64,7 +64,8 @@ class LLMExtractionEngine(ExtractionStrategy):
                         repo_id=repo_id,
                         filename=filename,
                         local_dir=os.path.dirname(model_path),
-                        local_dir_use_symlinks=False
+                        local_dir_use_symlinks=False,
+                        cache_dir="/tmp/huggingface_cache"
                     )
                     # If the download path is different from our expected path, rename it
                     if os.path.abspath(downloaded_path) != os.path.abspath(model_path):

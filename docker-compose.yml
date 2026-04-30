@@ -53,9 +53,11 @@ services:
 
       # Local LLM Configuration
       - LLM_ENABLED=true
-      - LLM_MODEL_PATH=/app/models/qwen2.5-0.5b-instruct-q5_k_m.gguf
-      - LLM_MODEL_REPO=Qwen/Qwen2.5-0.5B-Instruct-GGUF
-      - LLM_MODEL_FILE=qwen2.5-0.5b-instruct-q5_k_m.gguf
+      - LLM_MODEL_REPO=${LLM_MODEL_REPO:-Qwen/Qwen2.5-0.5B-Instruct-GGUF}
+      - LLM_MODEL_FILE=${LLM_MODEL_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      - LLM_MODEL_PATH=/app/models/${LLM_MODEL_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      - LLM_N_THREADS=${LLM_N_THREADS:-2}
+      - HF_HOME=/tmp/huggingface_cache
 
       # PaddlePaddle Environment Variables (CRITICAL)
       - INFERENCE_ENFORCE_USE_ONEDNN=0
@@ -69,7 +71,7 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 4G       # Minimum for both OCR + LLM
+          memory: 4G
         reservations:
           cpus: '0.5'
           memory: 2G
@@ -92,7 +94,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
 
     # Logging configuration
     logging:
