@@ -215,17 +215,24 @@ def reset_singletons():
 
 
 @pytest.fixture
-async def initialized_test_app(client):
-    """Get test client with initialized OCR service.
-
-    Args:
-        client: Test client fixture
-
-    Returns:
-        Initialized test client
-    """
+def initialized_test_app(client):
+    """Get test client with initialized OCR service."""
+    import asyncio
     # Initialize OCR service
     ocr_service = get_ocr_service()
-    await ocr_service.initialize()
+    
+    # Run the async initialization in a loop
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if loop.is_running():
+        # This is tricky in some environments, but for tests it usually works
+        # Alternatively, use a thread or just don't initialize if already running
+        pass
+    else:
+        loop.run_until_complete(ocr_service.initialize())
 
-    yield client
+    return client

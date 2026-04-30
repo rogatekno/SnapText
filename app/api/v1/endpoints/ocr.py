@@ -1,118 +1,102 @@
-"""OCR endpoints for text extraction and visualization.
+"""OCR endpoints for Document data extraction and visualization.
 
-This module provides the main OCR API endpoints for extracting text
-from images and creating visualizations with bounding boxes.
+This module provides the main OCR API endpoints for extracting data
+from Document images.
 """
 
 import time
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, UploadFile, status
-from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import Response
 
 from app.core.config import get_settings
 from app.core.exceptions import SnapTextException
 from app.models.schemas import (
-    OCRExtractResponse,
+    LLMPerformance,
     OCRMapResponse,
-    BoundingBox,
-    TextRegion,
-    OCRResult,
 )
+from app.core.logging import get_logger
 from app.services.ocr_service import get_ocr_service
 
-router = APIRouter()
 settings = get_settings()
+logger = get_logger("ocr_api")
+router = APIRouter()
 
 
 @router.post(
-    "/smart-scan",
+    "/scan",
     response_model=OCRMapResponse,
-    summary="Perform smart document scan",
-    description="Automatically classify document (KTP, KK, etc.) and extract relevant data fields. "
-                "Can also be used with specific field labels or table definitions.",
+    summary="Scan Document (KTP, KK, Invoice, etc.)",
+    description="Automatically extract structured data from documents using hybrid OCR and Local LLM.",
 )
-async def smart_scan(
-    file: UploadFile = File(..., description="Image file to process"),
-    fields: str = Form(default="", description="Optional: Comma-separated labels or JSON array"),
-    tables: Optional[str] = Form(None, description="Optional: JSON-encoded list of table definitions"),
+async def scan_document(
+    file: UploadFile = File(..., description="Image file of Document to process"),
     lang: str = Form(
         default="id",
         description="OCR language code",
-        pattern="^(en|id|ch|japan|korean|vi|fr|german|it|portuguese|spanish)$",
+        pattern="^(en|id)$",
     ),
-    debug: bool = Form(
-        default=False,
-        description="If true, includes a base64 debug image (preprocessed + OCR boxes) in the response"
-    ),
-):
-    """Smart document scan with auto-classification and mapping.
+    ):
+    """Scan Document and extract mapped data.
 
     Args:
         file: Uploaded image file
-        fields: Optional labels to look for (auto-classification if empty)
-        tables: Optional table definitions
         lang: OCR language code (default: 'id')
-        debug: Return a base64 annotated debug image in the response
 
     Returns:
-        OCRMapResponse with mapped data and document type
+        OCRMapResponse with Document data
     """
     start_time = time.time()
     ocr_service = get_ocr_service()
-
-    # Parse field list from form string
-    try:
-        import json
-        field_list = json.loads(fields) if fields else []
-        if not isinstance(field_list, list):
-            field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
-    except (json.JSONDecodeError, TypeError):
-        field_list = [f.strip() for f in str(fields).split(",") if f.strip()]
-
-    # Parse table definitions
-    table_definitions = None
-    if tables:
-        try:
-            import json
-            table_definitions = json.loads(tables)
-        except (json.JSONDecodeError, TypeError):
-            pass
 
     try:
         # Read file content
         file_content = await file.read()
 
-        # Perform smart mapping
+        # Perform mapping focused on Document
+        # Automatic classification will find the template
         mapped_data = await ocr_service.map_text_from_file(
             file_content=file_content,
             filename=file.filename or "unknown",
-            fields=field_list,
-            tables=table_definitions,
-            lang=lang,
+            fields=[],
+            lang=lang
         )
 
-        # Extract document type if it was auto-detected
-        doc_type = mapped_data.pop("_document_type", None)
+        # Extract metadata keys injected by service/engines
+        doc_type = mapped_data.pop("_document_type", "unknown")
+        llm_stats_raw = mapped_data.pop("_llm_stats", None)
+        ocr_time = mapped_data.pop("_ocr_time_ms", 0)
 
-        # Optionally generate debug image
-        debug_image = None
-        if debug:
-            debug_image = await ocr_service.generate_debug_image(
-                file_content=file_content,
-                filename=file.filename or "unknown",
-                lang=lang,
-            )
+        # Build LLMPerformance object if stats are available
+        llm_perf = None
+        llm_time = 0
+        if llm_stats_raw and isinstance(llm_stats_raw, dict):
+            try:
+                # Ensure provider defaults to settings value if not set by engine
+                if "provider" not in llm_stats_raw:
+                    llm_stats_raw["provider"] = settings.llm_provider
+                llm_perf = LLMPerformance(**llm_stats_raw)
+                llm_time = llm_stats_raw.get("elapsed_seconds", 0) * 1000
+            except Exception:
+                llm_perf = None
 
         processing_time = (time.time() - start_time) * 1000
+
+        # Log performance for immediate visibility
+        perf_info = f"DOC_TYPE={doc_type} | TOTAL={processing_time:.0f}ms | OCR={ocr_time:.0f}ms | LLM={llm_time:.0f}ms"
+        if llm_perf:
+            perf_info += f" | SPEED={llm_perf.tokens_per_second} tok/s"
+        logger.info(f"Scan complete: {perf_info}")
 
         return OCRMapResponse(
             success=True,
             data=mapped_data,
             document_type=doc_type,
             processing_time_ms=processing_time,
-            debug_image_base64=debug_image,
+            ocr_time_ms=ocr_time,
+            llm_time_ms=llm_time,
+            llm_performance=llm_perf,
         )
 
     except SnapTextException:
@@ -121,30 +105,10 @@ async def smart_scan(
         from app.core.exceptions import OCRError
 
         raise OCRError(
-            message=f"Unexpected error during smart scan: {str(e)}",
+            message=f"Unexpected error during Document scan: {str(e)}",
             details={"filename": file.filename},
+
         ) from e
-
-
-@router.post(
-    "/map",
-    response_model=OCRMapResponse,
-    summary="Map OCR results to specific fields (Alias for /smart-scan)",
-    description="This is an alias for /smart-scan for backward compatibility.",
-    deprecated=True,
-)
-async def map_fields(
-    file: UploadFile = File(..., description="Image file to process"),
-    fields: str = Form(default="", description="Comma-separated labels"),
-    tables: Optional[str] = Form(None, description="JSON table definitions"),
-    lang: str = Form(default="id", description="OCR language"),
-    debug: bool = Form(
-        default=False,
-        description="If true, includes a base64 debug image (preprocessed + OCR boxes) in the response"
-    ),
-):
-    """Alias for smart_scan."""
-    return await smart_scan(file=file, fields=fields, tables=tables, lang=lang, debug=debug)
 
 
 @router.post(
@@ -201,7 +165,7 @@ async def visualize(
 
 @router.get(
     "/info",
-    summary="Get OCR service information",
+    summary="Get KTP OCR service information",
     description="Get information about supported formats and limits",
 )
 async def get_info():
@@ -217,20 +181,9 @@ async def get_info():
         "data": {
             "supported_formats": await ocr_service.get_supported_formats(),
             "max_file_size": await ocr_service.get_max_file_size(),
-            "supported_languages": [
-                "en",
-                "id",
-                "ch",
-                "japan",
-                "korean",
-                "vi",
-                "fr",
-                "german",
-                "it",
-                "portuguese",
-                "spanish",
-            ],
+            "supported_languages": ["en", "id"],
             "default_language": settings.ocr_lang,
             "service_ready": ocr_service.is_ready(),
+            "focus_document": "KTP (Indonesian ID Card)"
         },
     }

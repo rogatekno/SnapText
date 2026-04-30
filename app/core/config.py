@@ -7,7 +7,7 @@ using environment variables with sensible defaults.
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -56,7 +56,14 @@ class Settings(BaseSettings):
     # OCR Configuration
     ocr_lang: str = Field(default="en", alias="OCR_LANG")
     ocr_use_angle_cls: bool = Field(default=True, alias="OCR_USE_ANGLE_CLS")
-    ocr_max_dimension: int = Field(default=1600, alias="OCR_MAX_DIMENSION")
+
+    # LLM Configuration
+    llm_enabled: bool = Field(default=True, alias="LLM_ENABLED")
+    llm_model_path: str = Field(
+        default=str(BASE_DIR / "models" / "qwen2.5-0.5b-instruct-q4_k_m.gguf"),
+        alias="LLM_MODEL_PATH"
+    )
+    llm_n_ctx: int = Field(default=2048, alias="LLM_N_CTX")  # 2048 is the sweet spot for KTP + rules
 
     # Upload Configuration
     max_upload_size_mb: int = Field(default=10, alias="MAX_UPLOAD_SIZE_MB")

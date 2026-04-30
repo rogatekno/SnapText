@@ -6,19 +6,83 @@
         "Gol[\\.\\/]?\\s*[Dd]arah\\s*[:\\-]?\\s*[A-B]?[ABO]?\\+?\\-?"
     ],
     "fields": [
-        "NIK", 
-        "Nama", 
-        "Tempat/Tgl Lahir", 
-        "Jenis Kelamin", 
-        "Alamat", 
+        "NIK",
+        "Nama",
+        "Tempat/Tgl Lahir",
+        "Jenis Kelamin",
+        "Alamat",
         "RT/RW",
         "Kel/Desa",
         "Kecamatan",
-        "Agama", 
-        "Status Perkawinan", 
-        "Pekerjaan", 
-        "Kewarganegaraan", 
+        "Agama",
+        "Status Perkawinan",
+        "Pekerjaan",
+        "Kewarganegaraan",
         "Berlaku Hingga"
     ],
-    "tables": []
+    "tables": [],
+
+    "llm_output_schema": {
+        "nik": null,
+        "name": null,
+        "birth_place": null,
+        "birth_date": null,
+        "gender": null,
+        "address": null,
+        "rt_rw": null,
+        "village": null,
+        "district": null,
+        "religion": null,
+        "marital_status": null,
+        "occupation": null,
+        "citizenship": null,
+        "valid_until": null
+    },
+
+    "llm_noise_labels": [
+        "Gol. Darah", "Gol Darah", "Gol.Darah", "GOL. DARAH", "GOL DARAH"
+    ],
+
+    "llm_field_rules": [
+        "nik: 16-digit numeric ID only (e.g. 3204051234560001). NEVER a person name.",
+        "name: full person name from the 'Nama' label.",
+        "birth_place: city/regency name from 'Tempat/Tgl Lahir' field, appearing BEFORE the date.",
+        "birth_date: date portion from 'Tempat/Tgl Lahir', format DD-MM-YYYY.",
+        "gender: LAKI-LAKI or PEREMPUAN. Found after 'Jenis Kelamin' label.",
+        "'Gol. Darah' / 'Gol Darah' is BLOOD TYPE — it is NOT a data field. IGNORE any value next to it.",
+        "address: street address from 'Alamat'. Does NOT include Gol. Darah.",
+        "rt_rw: two numbers separated by slash (e.g. 003/007).",
+        "village: from 'Kel/Desa' label.",
+        "district: from 'Kecamatan' label.",
+        "religion: from 'Agama' label.",
+        "marital_status: from 'Status Perkawinan' (e.g. KAWIN, BELUM KAWIN).",
+        "occupation: job title from 'Pekerjaan' label ONLY (e.g. PEGAWAI SWASTA, WIRASWASTA, GURU, DOKTER, BURUH). The bottom-right corner of KTP contains a city stamp and date (e.g. 'JAKARTA BARAT', '22-02-2017') — these are NOT part of the occupation. Stop at the first non-job word.",
+        "citizenship: from 'Kewarganegaraan' (WNI or country name).",
+        "valid_until: from 'Berlaku Hingga' (e.g. SEUMUR HIDUP or a date).",
+        "CRITICAL — PRESERVE SPACES: Output every value EXACTLY as it appears, keeping ALL spaces between words. 'MIRA SETIAWAN' stays 'MIRA SETIAWAN'. 'JL. PASTI CEPAT A7/66' stays 'JL. PASTI CEPAT A7/66'. Never merge words.",
+        "Use null for any field not found in the OCR text."
+    ],
+
+    "llm_few_shot": {
+        "input": "NIK : 3274081977032500\nNama : MIRA SETIAWAN\nTempat/Tgl Lahir : BANDUNG 05-03-1977\nJenis Kelamin : PEREMPUAN Gol. Darah : A\nAlamat : JL. PASTI CEPAT NO 10\nRT/RW : 003/007\nKel/Desa : SUKAMAJU\nKecamatan : BANDUNG\nAgama : ISLAM\nStatus Perkawinan : KAWIN\nPekerjaan : PEGAWAI SWASTA BANDUNG 05-03-2020\nKewarganegaraan : WNI\nBerlaku Hingga : SEUMUR HIDUP",
+        "output": {
+            "document_type": "ktp",
+            "entities": {
+                "nik": "3274081977032500",
+                "name": "MIRA SETIAWAN",
+                "birth_place": "BANDUNG",
+                "birth_date": "05-03-1977",
+                "gender": "PEREMPUAN",
+                "address": "JL. PASTI CEPAT NO 10",
+                "rt_rw": "003/007",
+                "village": "SUKAMAJU",
+                "district": "BANDUNG",
+                "religion": "ISLAM",
+                "marital_status": "KAWIN",
+                "occupation": "PEGAWAI SWASTA",
+                "citizenship": "WNI",
+                "valid_until": "SEUMUR HIDUP"
+            }
+        }
+    }
 }

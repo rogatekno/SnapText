@@ -1,0 +1,44 @@
+{
+    "name": "BPJS Ketenagakerjaan - Kartu Peserta",
+    "anchors": ["KARTU PESERTA", "BPJS", "Ketenagakerjaan", "BPJS Ketenagakerjaan"],
+    "extra_labels": [],
+    "exclude_value_patterns": [],
+    "fields": [
+        "Nomor Peserta",
+        "Nomor KPJ",
+        "Nama",
+        "Tanggal Registrasi"
+    ],
+    "tables": [],
+
+    "llm_output_schema": {
+        "nomor_peserta": null,
+        "nomor_kpj": null,
+        "name": null,
+        "registration_date": null
+    },
+
+    "llm_noise_labels": [],
+
+    "llm_field_rules": [
+        "CARD LAYOUT (top to bottom): title 'KARTU PESERTA' → nomor_peserta (numbers) → nomor_kpj (numbers) → name (person name) → registration_date (MM YYYY) → BPJS logo.",
+        "nomor_peserta: NUMBERS ONLY. A 16-digit number, may appear with spaces as groups of 4 (e.g. '3306 0445 0195 0002'). Strip spaces. NEVER a person name. Set null if no numeric value found.",
+        "nomor_kpj: NUMBERS ONLY. An 11-digit number (e.g. '13032513510'). It appears BELOW nomor_peserta and ABOVE the person name. NEVER a person name or date. Set null if no 11-digit number found.",
+        "name: The person's full name in ALL CAPS (e.g. 'ARNEZA ALFAS'). It is alphabetic, NOT a number.",
+        "registration_date: Month and year only (e.g. '11 2014' or '10 2013'). A 2-digit month space 4-digit year.",
+        "Use null for any field not found. Do NOT guess — if a field value is a name where a number is expected, set it to null."
+    ],
+
+    "llm_few_shot": {
+        "input": "KARTU PESERTA\n3306 0445 0195 0002\n13032513510\nCANDRA RESMI\n10 2013\nBPJS Ketenagakerjaan",
+        "output": {
+            "document_type": "bpjs_ketenagakerjaan",
+            "entities": {
+                "nomor_peserta": "3306044501950002",
+                "nomor_kpj": "13032513510",
+                "name": "CANDRA RESMI",
+                "registration_date": "10 2013"
+            }
+        }
+    }
+}

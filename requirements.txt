@@ -96,3 +96,7 @@ watchfiles==1.1.1
 wcwidth==0.6.0
 websockets==16.0
 win32_setctime==1.2.0
+
+# Local LLM
+llama-cpp-python>=0.3.0 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+huggingface_hub>=0.24.0

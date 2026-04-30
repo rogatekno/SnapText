@@ -51,6 +51,12 @@ services:
       - REQUEST_TIMEOUT_SECONDS=60
       - ASYNC_PROCESSING_ENABLED=true
 
+      # Local LLM Configuration
+      - LLM_ENABLED=true
+      - LLM_MODEL_PATH=/app/models/qwen2.5-0.5b-instruct-q5_k_m.gguf
+      - LLM_MODEL_REPO=Qwen/Qwen2.5-0.5B-Instruct-GGUF
+      - LLM_MODEL_FILE=qwen2.5-0.5b-instruct-q5_k_m.gguf
+
       # PaddlePaddle Environment Variables (CRITICAL)
       - INFERENCE_ENFORCE_USE_ONEDNN=0
       - FLAGS_use_mkldnn=false
@@ -58,29 +64,27 @@ services:
       - FLAGS_cudnn_frontend_ops=False
       - FLAGS_use_cublas_tensorop_math=false
 
-    # Resource limits (INCREASED for PaddleOCR - minimum 2GB needed)
+    # Resource limits (INCREASED for PaddleOCR + LLM - minimum 4GB recommended)
     deploy:
       resources:
         limits:
-          cpus: '2.0'      # Increased for PaddleOCR
-          memory: 2G       # MINIMUM for PaddleOCR, recommend 4G if possible
+          cpus: '2.0'
+          memory: 4G       # Minimum for both OCR + LLM
         reservations:
-          cpus: '0.5'      # Minimum CPU
-          memory: 1G       # Minimum memory reservation
+          cpus: '0.5'
+          memory: 2G
 
-    # Port mapping (handled by Coolify)
-    # expose:
-    #   - 8000
+    # Restart policy
+    restart: unless-stopped
 
     # Volume mounts
     volumes:
       # Persist logs
       - ./logs:/app/logs
-      # Cache for OCR models (optional, for faster restarts)
+      # Persist LLM models (prevent re-download on restart)
+      - ./models:/app/models
+      # Cache for OCR models
       - ocr-cache:/tmp/ocr_cache
-
-    # Restart policy
-    restart: unless-stopped
 
     # Healthcheck
     healthcheck:

@@ -166,3 +166,4 @@ test_images/
 *.bmp
 *.tiff
 !tests/fixtures/*
+*.gguf

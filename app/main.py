@@ -51,9 +51,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     logger = get_logger(__name__)
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
 
-    # Skip model loading on startup to prevent crashes on low-resource servers
-    # Model will be loaded on first request (lazy loading)
-    logger.info("OCR model will be loaded on first request (lazy loading)")
+    # Models will be pre-loaded in the background
+    logger.info("Initializing background warmup for OCR models...")
+    import asyncio
+    async def background_warmup():
+        try:
+            from app.services.ocr_service import get_ocr_service
+            ocr_service = get_ocr_service()
+            await ocr_service.initialize()
+            logger.info("Background Warmup Complete: OCR ready for inference!")
+        except Exception as e:
+            logger.error(f"Background Warmup Failed: {str(e)}")
+
+    # Start the task without waiting
+    asyncio.create_task(background_warmup())
 
     yield
 
@@ -79,40 +90,22 @@ def create_app() -> FastAPI:
     """
     # Create FastAPI app
     app = FastAPI(
-        title=settings.app_name,
-        description="""## SnapText - Open Source OCR Service
-
+        title="SnapText - OCR Service",
+        description="""## SnapText - OCR Service
+        
 **Created by RogaTekno**
 
-### License
-This project is licensed under the **MIT License** - Free to use, modify, and distribute.
-
-### Intended Use
-- **Educational Purposes**: Learning OCR technology, FastAPI, and REST API design
-- **Research Purposes**: Academic research and experimentation
-- **Development**: Building custom OCR solutions
+### Focus
+This service is specifically optimized for extracting data.
 
 ### Features
 - Text extraction from images using RapidOCR (ONNX Runtime)
-- Bounding box visualization with watermark
-- Multi-language support (10+ languages)
-- RESTful API with interactive documentation
-- Clean architecture for easy extension
+- Automatic detection of data fields
+- Bounding box visualization
+- Clean API design for easy integration
 
-### Terms
-- Free for educational and research use
-- Please give attribution when appropriate
-- Comply with data protection laws
-- Contribute improvements back to community
-
-### Documentation
-- See /docs for interactive API documentation
-- Visit GitHub repository for full documentation
-- Check LICENSE file for full terms
-
----
-
-**Note**: OCR visualization results include watermark "RogaTekno"
+### License
+MIT License - Free to use, modify, and distribute.
 """,
         version=settings.app_version,
         docs_url="/docs",
@@ -161,9 +154,9 @@ This project is licensed under the **MIT License** - Free to use, modify, and di
     async def root() -> dict:
         """Root endpoint with API information."""
         return {
-            "name": settings.app_name,
+            "name": "SnapText KTP OCR",
             "version": settings.app_version,
-            "description": settings.app_description,
+            "description": "Indonesian KTP OCR Extraction Service",
             "docs_url": "/docs",
             "api_prefix": settings.api_v1_prefix,
             "health_check": f"{settings.api_v1_prefix}/health",

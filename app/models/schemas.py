@@ -148,15 +148,28 @@ class OCRTableDefinition(BaseModel):
     columns: List[str] = Field(..., description="List of column headers to look for")
 
 
+class LLMPerformance(BaseModel):
+    """LLM inference performance metrics."""
+
+    provider: str = Field("local", description="LLM provider used (local, GeminiEngine, OpenAIEngine, etc.)")
+    elapsed_seconds: float = Field(description="Total inference time in seconds")
+    prompt_tokens: int = Field(description="Number of tokens in the prompt")
+    completion_tokens: int = Field(description="Number of tokens generated")
+    total_tokens: int = Field(description="Total tokens consumed")
+    tokens_per_second: Optional[float] = Field(None, description="Generation speed in tokens/second")
+
+
 class OCRMapResponse(BaseResponse):
     """Response schema for OCR mapping endpoint."""
 
     data: Dict[str, Any] = Field(..., description="Mapped key-value pairs")
-    document_type: Optional[str] = Field(None, description="Detected document type (if auto-mapping was used)")
-    processing_time_ms: float = Field(description="Processing time in milliseconds")
-    debug_image_base64: Optional[str] = Field(
+    document_type: Optional[str] = Field(None, description="Detected document type")
+    processing_time_ms: float = Field(description="Total processing time in milliseconds")
+    ocr_time_ms: Optional[float] = Field(None, description="Time spent on OCR detection/recognition")
+    llm_time_ms: Optional[float] = Field(None, description="Time spent on LLM inference")
+    llm_performance: Optional[LLMPerformance] = Field(
         None,
-        description="Base64-encoded PNG of preprocessed image with OCR bounding boxes (only when debug=true)"
+        description="LLM inference performance metrics (only when LLM engine is active)"
     )
 
 
