@@ -33,9 +33,9 @@ services:
       - CORS_ALLOW_METHODS=["*"]
       - CORS_ALLOW_HEADERS=["*"]
 
-      # PaddleOCR Configuration
-      - PADDLEOCR_LANG=en
-      - PADDLEOCR_USE_ANGLE_CLS=true
+      # RapidOCR Configuration
+      - OCR_LANG=id
+      - OCR_USE_ANGLE_CLS=true
 
       # Upload Configuration
       - MAX_UPLOAD_SIZE_MB=10
