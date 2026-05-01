@@ -8,11 +8,11 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # Initialize result backend with isolation prefix
 result_backend = RedisAsyncResultBackend(
     redis_url=REDIS_URL,
-    # Isolation prefix for global Redis
-    redis_prefix="snaptext_ocr_res",
-    # Results will be stored for 1 hour
+    # Isolation prefix for global Redis (correct param name: prefix_str)
+    prefix_str="snaptext_ocr_res",
+    # Results will be stored for 1 hour (correct param name: result_ex_time, in seconds)
     keep_results=True,
-    result_ttl=3600,
+    result_ex_time=3600,
 )
 
 # Initialize Broker with unique queue name for isolation
