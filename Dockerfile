@@ -15,21 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-# 1. Upgrade pip only — DO NOT upgrade setuptools/wheel here.
-# Upgrading wheel pulls 'packaging' as a global dep, which causes
-# 'pip install --prefix=/install packaging' to be silently skipped.
+# 1. Upgrade pip only — NOT setuptools/wheel (avoids 'packaging' landing in
+# global site-packages and being skipped when we install to /install later).
 RUN pip install --upgrade pip
 
-# 2. Install llama-cpp-python into /install using prebuilt wheel (--prefer-binary).
-# This avoids the 60-120s source compilation that causes Coolify build timeout.
-RUN pip install --prefix=/install --prefer-binary \
-    "llama-cpp-python==0.3.9" \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-
-# 3. Install all remaining requirements (including 'packaging') into /install.
-# packaging>=23.0 is listed in requirements.txt and will correctly land here.
+# 2. Install everything into /install in one shot.
+# --prefer-binary: use prebuilt wheels (avoids 60-120s C++ source compilation).
+# --extra-index-url: provides prebuilt CPU wheels for llama-cpp-python.
 COPY requirements.txt .
-RUN pip install --prefix=/install --prefer-binary -r requirements.txt
+RUN pip install --prefix=/install --prefer-binary \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+    -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim-bookworm

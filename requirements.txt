@@ -10,8 +10,9 @@ python-dotenv==1.0.1
 rapidocr_onnxruntime>=1.3.0
 onnxruntime>=1.16.0
 
-# LLM Support
+# LLM Support (GGUF inference via llama-cpp-python CPU wheels)
 huggingface_hub>=0.24.0
+llama-cpp-python>=0.2.90
 
 # Image & Data Processing
 Pillow>=10.0.0
