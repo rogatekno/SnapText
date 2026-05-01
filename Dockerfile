@@ -15,12 +15,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-# 1. Install llama-cpp-python from wheels
-RUN pip install --upgrade pip setuptools wheel packaging && \
+# 1. Upgrade pip tools (global, for build tooling only)
+RUN pip install --upgrade pip setuptools wheel
+
+# 2. Install packaging + llama-cpp-python into /install (will be copied to runtime)
+RUN pip install --prefix=/install packaging && \
     pip install --prefix=/install "llama-cpp-python>=0.3.0" \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
-# 2. Install remaining requirements
+# 3. Install remaining requirements into /install
 COPY requirements.txt .
 RUN pip install --prefix=/install -r requirements.txt
 
