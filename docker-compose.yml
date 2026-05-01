@@ -65,7 +65,7 @@ services:
       - XLAN_ENABLE=0
       - FLAGS_cudnn_frontend_ops=False
       - FLAGS_use_cublas_tensorop_math=false
-      - REDIS_URL=redis://154.26.129.168:6379/0
+      - REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
 
     # Resource limits (INCREASED for PaddleOCR + LLM - minimum 4GB recommended)
     deploy:
@@ -127,7 +127,7 @@ services:
     command: python3 -m taskiq worker app.core.broker:broker --fs-discover
     environment:
       - ENVIRONMENT=production
-      - REDIS_URL=redis://154.26.129.168:6379/0
+      - REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
       - OCR_LANG=id
       - LLM_ENABLED=true
       - LLM_MODEL_REPO=${LLM_MODEL_REPO:-Qwen/Qwen2.5-0.5B-Instruct-GGUF}
