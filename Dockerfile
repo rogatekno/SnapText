@@ -19,13 +19,14 @@ WORKDIR /build
 # global site-packages and being skipped when we install to /install later).
 RUN pip install --upgrade pip
 
-# 2. Install everything into /install in one shot.
-# --prefer-binary: use prebuilt wheels (avoids 60-120s C++ source compilation).
-# --extra-index-url: provides prebuilt CPU wheels for llama-cpp-python.
+# 2a. Build llama-cpp-python FROM SOURCE (no --prefer-binary, no musl index).
+# The abetlen prebuilt wheels are musl/Alpine-only and crash on Debian (glibc).
+# builder stage has build-essential + cmake, so this compiles a glibc-compatible .so.
+RUN pip install --prefix=/install "llama-cpp-python>=0.2.90"
+
+# 2b. Install all remaining requirements with prebuilt wheels (safe for Debian).
 COPY requirements.txt .
-RUN pip install --prefix=/install --prefer-binary \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
-    -r requirements.txt
+RUN pip install --prefix=/install --prefer-binary -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim-bookworm

@@ -124,7 +124,7 @@ services:
     image: snaptext-ocr:latest
     container_name: snaptext-worker
     # Command to run taskiq worker
-    command: python3 -m taskiq worker app.core.broker:broker --fs-startup
+    command: python3 -m taskiq worker app.core.broker:broker --fs-discover
     environment:
       - ENVIRONMENT=production
       - REDIS_URL=redis://154.26.129.168:6379/0
