@@ -5,14 +5,13 @@ from taskiq import TaskiqEvents
 # Get Redis URL from environment
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Initialize result backend with isolation prefix
+# Initialize result backend
+# taskiq-redis==0.5.5 accepts: redis_url, keep_results, result_ex_time, result_px_time
+# NOTE: prefix_str was added in a later version — isolation is handled by queue_name instead
 result_backend = RedisAsyncResultBackend(
     redis_url=REDIS_URL,
-    # Isolation prefix for global Redis (correct param name: prefix_str)
-    prefix_str="snaptext_ocr_res",
-    # Results will be stored for 1 hour (correct param name: result_ex_time, in seconds)
     keep_results=True,
-    result_ex_time=3600,
+    result_ex_time=3600,  # Results stored for 1 hour
 )
 
 # Initialize Broker with unique queue name for isolation
