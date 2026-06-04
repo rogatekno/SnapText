@@ -30,6 +30,7 @@ _GENERIC_RULES = [
     "Use snake_case for all keys.",
     "Use null for any field not found.",
     "CRITICAL: Always preserve spaces between words in Names and Addresses (e.g. 'MIRA SETIAWAN' not 'MIRASETIAWAN').",
+    "CRITICAL: If the OCR text merged words without spaces (e.g. 'LUKISETIAWAN' or 'DUSUNNARINGUL'), you MUST fix it by adding the correct spaces (e.g. 'LUKI SETIAWAN' and 'DUSUN NARINGUL'). Do NOT change the spelling of the words, only insert missing spaces.",
 ]
 
 
@@ -145,7 +146,7 @@ class LLMExtractionEngine(ExtractionStrategy):
         noise_labels: List[str] = template.get("llm_noise_labels", [])
         raw_text = self._filter_noise(raw_text_lines, noise_labels)
 
-        logger.info(f"OCR text after noise filtering: {len(raw_text)} chars")
+        logger.info(f"OCR text after noise filtering ({len(raw_text)} chars):\n{raw_text}")
 
         # 4. Build template-driven prompt
         prompt = self._build_prompt(raw_text, template)
@@ -252,7 +253,7 @@ class LLMExtractionEngine(ExtractionStrategy):
         schema_hint = ""
         if output_schema:
             schema_hint = (
-                "\nOUTPUT SCHEMA (use exactly these keys):\n"
+                "\nCRITICAL: You MUST output a JSON object using EXACTLY these keys. DO NOT invent keys. DO NOT use Indonesian labels as keys. Use these EXACT English keys:\n"
                 + json.dumps({"document_type": template.get("doc_type", "document"), "entities": output_schema},
                               ensure_ascii=False)
             )
@@ -327,9 +328,43 @@ class LLMExtractionEngine(ExtractionStrategy):
         for line_regions in lines_of_regions:
             # Sort by X to ensure reading order within the line
             sorted_line = sorted(line_regions, key=lambda r: r.get("_min_x", 0))
-            text_parts = [r.get("text", "").strip() for r in sorted_line if r.get("text", "").strip()]
-            if text_parts:
-                final_lines.append(" ".join(text_parts))
+            if not sorted_line:
+                continue
+            
+            line_text = ""
+            prev_max_x = None
+            
+            # calculate heuristic character width based on average line height
+            max_h = max([r.get("_height", 20) for r in sorted_line if r.get("_height", 0) > 0], default=20)
+            avg_char_w = max_h * 0.45
+            
+            for r in sorted_line:
+                text = r.get("text", "").strip()
+                if not text:
+                    continue
+                min_x = r.get("_min_x", 0)
+                if prev_max_x is not None:
+                    distance = min_x - prev_max_x
+                    if distance > avg_char_w * 3.5:
+                        line_text += "    "  # 4 spaces for a large column gap
+                    elif distance > avg_char_w * 1.5:
+                        line_text += "  "    # 2 spaces for a noticeable gap
+                    else:
+                        line_text += " "     # Standard space, ensures we never accidentally merge separate boxes
+                
+                line_text += text
+                # Try to use actual _max_x if present, otherwise guess based on char count
+                # Usually paddleocr or similar provides _max_x or bbox
+                bbox = r.get("bbox", [])
+                if bbox and len(bbox) == 4:
+                    prev_max_x = max(pt[0] for pt in bbox)
+                elif "_max_x" in r:
+                    prev_max_x = r.get("_max_x")
+                else:
+                    prev_max_x = min_x + (len(text) * avg_char_w)
+
+            if line_text:
+                final_lines.append(line_text.strip())
 
         return final_lines
 

@@ -161,8 +161,6 @@ class OCRService:
         for key, val in data.items():
             if isinstance(val, str):
                 processed_val = val
-                if any(p in key.lower() for p in ["nama", "alamat", "kecamatan", "kelurahan", "agama", "kewarganegaraan"]):
-                    processed_val = processed_val.title()
                 processed_val = re.sub(r'^[,\s·:;=\-|]+|[,\s·:;=\-|]+$', '', processed_val).strip()
                 data[key] = processed_val
             elif isinstance(val, list):

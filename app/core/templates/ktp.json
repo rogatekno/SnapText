@@ -51,7 +51,7 @@
         "gender: LAKI-LAKI or PEREMPUAN. Found after 'Jenis Kelamin' label.",
         "'Gol. Darah' / 'Gol Darah' is BLOOD TYPE — it is NOT a data field. IGNORE any value next to it.",
         "address: street address from 'Alamat'. Does NOT include Gol. Darah.",
-        "rt_rw: two numbers separated by slash (e.g. 003/007).",
+        "rt_rw: MUST be two numbers separated by a slash (e.g. 003/007). If OCR merged them (e.g. 001001), you MUST add the slash (001/001).",
         "village: from 'Kel/Desa' label.",
         "district: from 'Kecamatan' label.",
         "religion: from 'Agama' label.",
@@ -59,7 +59,7 @@
         "occupation: job title from 'Pekerjaan' label ONLY (e.g. PEGAWAI SWASTA, WIRASWASTA, GURU, DOKTER, BURUH). The bottom-right corner of KTP contains a city stamp and date (e.g. 'JAKARTA BARAT', '22-02-2017') — these are NOT part of the occupation. Stop at the first non-job word.",
         "citizenship: from 'Kewarganegaraan' (WNI or country name).",
         "valid_until: from 'Berlaku Hingga' (e.g. SEUMUR HIDUP or a date).",
-        "CRITICAL — PRESERVE SPACES: Output every value EXACTLY as it appears, keeping ALL spaces between words. 'MIRA SETIAWAN' stays 'MIRA SETIAWAN'. 'JL. PASTI CEPAT A7/66' stays 'JL. PASTI CEPAT A7/66'. Never merge words.",
+        "CRITICAL — PRESERVE SPACES: Output every value exactly as it appears, but IF the OCR merged words together (e.g. 'LUKISETIAWAN' or 'DUSUNNARINGUL'), you MUST fix it by adding the correct spaces ('LUKI SETIAWAN', 'DUSUN NARINGUL'). Do NOT change the spelling.",
         "Use null for any field not found in the OCR text."
     ],
 
