@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnapText AI - Document Extraction</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --surface: rgba(24, 24, 27, 0.7);
+            --surface-hover: rgba(39, 39, 42, 0.8);
+            --border: rgba(255, 255, 255, 0.1);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --accent: #8b5cf6;
+            --text: #fafafa;
+            --text-dim: #a1a1aa;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image:
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            text-align: center;
+            background: linear-gradient(135deg, #a5b4fc, #c4b5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        p.subtitle {
+            color: var(--text-dim);
+            text-align: center;
+            margin-bottom: 3rem;
+            font-size: 1.1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .glass-panel {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* ── Upload Zone ────────────────────────────────── */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 180px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+        .upload-zone input { display: none; }
+        .upload-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .upload-text { font-weight: 500; font-size: 1.1rem; }
+
+        /* ── Side-by-side Preview ───────────────────────── */
+        .preview-panel {
+            display: none;
+        }
+        .preview-panel.visible {
+            display: block;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 700px) {
+            .preview-grid { grid-template-columns: 1fr; }
+        }
+
+        .preview-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .preview-card-header {
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .preview-card-header .badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+        }
+        .preview-card img {
+            width: 100%;
+            display: block;
+            object-fit: contain;
+            max-height: 350px;
+            background: #111;
+        }
+
+        /* ── Controls Row ──────────────────────────────── */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            flex: 1;
+            min-width: 240px;
+        }
+        .toggle-switch .toggle-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-dim);
+        }
+        .toggle-switch .toggle-sub {
+            font-size: 0.75rem;
+            color: #71717a;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #3f3f46;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        /* ── Buttons ────────────────────────────────────── */
+        .btn {
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            color: white;
+            border: none;
+            padding: 0.9rem 1.5rem;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+        .btn:disabled {
+            background: #3f3f46;
+            color: #71717a;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            box-shadow: none;
+        }
+        .btn-outline:hover {
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+        .btn-outline:disabled {
+            border-color: #3f3f46;
+            color: #71717a;
+            background: transparent;
+            box-shadow: none;
+        }
+        .btn-lg {
+            padding: 1.2rem 2.5rem;
+            font-size: 1.1rem;
+        }
+
+        /* ── Step indicator ─────────────────────────────── */
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .step-badge {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .step-badge.done {
+            background: var(--success);
+        }
+        .step-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        /* ── Timeline / Progress ────────────────────────── */
+        .pipeline-panel {
+            display: none;
+        }
+        .pipeline-panel.visible {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            opacity: 0.4;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateX(-10px);
+        }
+        .step.active { opacity: 1; transform: translateX(0); }
+        .step.done { opacity: 0.8; transform: translateX(0); }
+
+        .step-icon {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem;
+        }
+        .step.active .step-icon {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+        .step.done .step-icon {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+        .step-text { font-weight: 500; }
+        .step-desc {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            display: block;
+            margin-top: 0.2rem;
+        }
+
+        /* ── Result Panel ──────────────────────────────── */
+        .result-wrapper {
+            display: none;
+        }
+        .result-wrapper.visible {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .result-code {
+            background: rgba(0,0,0,0.5);
+            border-radius: 12px;
+            padding: 1.5rem;
+            overflow: auto;
+            color: #c4b5fd;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            white-space: pre-wrap;
+            max-height: 500px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .result-code.show { opacity: 1; }
+
+        /* ── Divider ────────────────────────────────────── */
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 0;
+        }
+
+        /* ── Animations ─────────────────────────────────── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up {
+            animation: fadeUp 0.4s ease-out forwards;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SnapText AI</h1>
+    <p class="subtitle">Intelligent Document Extraction using RapidOCR + Qwen 1.5B</p>
+
+    <div class="container">
+
+        <!-- ═══════ Step 1: Upload & Review ═══════ -->
+        <div class="glass-panel" id="review-panel">
+            <div class="step-indicator">
+                <div class="step-badge" id="step1-badge">1</div>
+                <div class="step-title">Upload & Review</div>
+            </div>
+
+            <label class="upload-zone" id="drop-zone">
+                <input type="file" id="file-input" accept="image/*">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text" id="file-name">Click or Drag Image Here</div>
+            </label>
+
+            <!-- Side-by-side preview (hidden until file uploaded) -->
+            <div class="preview-panel" id="preview-panel">
+                <div class="preview-grid">
+                    <div class="preview-card">
+                        <div class="preview-card-header">
+                            🖼️ Original <span class="badge">SOURCE</span>
+                        </div>
+                        <img id="original-preview" alt="Original image">
+                    </div>
+                    <div class="preview-card">
+                        <div class="preview-card-header">
+                            🔧 Processed <span class="badge" id="processed-badge">NO FILTER</span>
+                        </div>
+                        <img id="processed-preview" alt="Processed image">
+                    </div>
+                </div>
+
+                <div class="controls-row">
+                    <label class="toggle-switch">
+                        <div>
+                            <div class="toggle-label">OpenCV Optimization</div>
+                            <div class="toggle-sub">Grayscale + Adaptive Thresholding</div>
+                        </div>
+                        <div class="switch">
+                            <input type="checkbox" id="preprocess-chk" checked>
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                    <button id="preview-btn" class="btn btn-outline" disabled>Preview Preprocessing 👁️</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════ Step 2: Submit to OCR ═══════ -->
+        <div class="glass-panel" id="submit-panel" style="display:none;">
+            <div class="step-indicator">
+                <div class="step-badge" id="step2-badge">2</div>
+                <div class="step-title">Submit to OCR</div>
+            </div>
+
+            <p style="color: var(--text-dim); margin: 0; font-size: 0.95rem;" id="submit-desc">
+                Review the preprocessed image above, then submit for full OCR + LLM extraction.
+            </p>
+
+            <div class="controls-row">
+                <button id="scan-btn" class="btn btn-lg" disabled>Submit to OCR ✨</button>
+                <button id="change-img-btn" class="btn btn-outline">Change Image 🔄</button>
+            </div>
+        </div>
+
+        <!-- ═══════ Pipeline & Results ═══════ -->
+        <div class="glass-panel pipeline-panel" id="pipeline-panel">
+            <div class="step-indicator">
+                <div class="step-badge" style="background: var(--success);">✓</div>
+                <div class="step-title">Processing Pipeline</div>
+            </div>
+
+            <div id="timeline">
+                <div class="step" id="step-uploading">
+                    <div class="step-icon">1</div>
+                    <div><span class="step-text">Loading Image</span><span class="step-desc">Reading preprocessed image</span></div>
+                </div>
+                <div class="step" id="step-ocr">
+                    <div class="step-icon">2</div>
+                    <div><span class="step-text">Optical Character Recognition</span><span class="step-desc">Extracting raw bounding boxes</span></div>
+                </div>
+                <div class="step" id="step-classification">
+                    <div class="step-icon">3</div>
+                    <div><span class="step-text">Document Routing</span><span class="step-desc">Identifying document type via spatial anchors</span></div>
+                </div>
+                <div class="step" id="step-llm">
+                    <div class="step-icon">4</div>
+                    <div><span class="step-text">LLM Structuring</span><span class="step-desc">Qwen 1.5B is analyzing semantics...</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel result-wrapper" id="result-wrapper">
+            <h3 style="margin: 0; color: var(--success); font-family: 'Outfit';">Extraction Complete!</h3>
+            <div class="result-code" id="json-output"></div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const fileName = document.getElementById('file-name');
+        const previewPanel = document.getElementById('preview-panel');
+        const originalPreview = document.getElementById('original-preview');
+        const processedPreview = document.getElementById('processed-preview');
+        const processedBadge = document.getElementById('processed-badge');
+        const preprocessChk = document.getElementById('preprocess-chk');
+        const previewBtn = document.getElementById('preview-btn');
+        const submitPanel = document.getElementById('submit-panel');
+        const scanBtn = document.getElementById('scan-btn');
+        const changeImgBtn = document.getElementById('change-img-btn');
+        const pipelinePanel = document.getElementById('pipeline-panel');
+        const resultWrapper = document.getElementById('result-wrapper');
+        const jsonOutput = document.getElementById('json-output');
+        const step1Badge = document.getElementById('step1-badge');
+        const step2Badge = document.getElementById('step2-badge');
+
+        let selectedFile = null;
+        let preprocessedImageB64 = null;  // The base64 image to send to OCR
+        let originalImageB64 = null;      // Original image for re-previewing
+
+        // ── Drag & Drop ──────────────────────────────────
+        ['dragenter', 'dragover'].forEach(evt => {
+            dropZone.addEventListener(evt, e => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+            dropZone.addEventListener(evt, e => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+            });
+        });
+        dropZone.addEventListener('drop', e => {
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', e => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            fileName.textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                originalImageB64 = e.target.result;
+                originalPreview.src = originalImageB64;
+                processedPreview.src = originalImageB64;  // Default: no filter
+                processedBadge.textContent = 'NO FILTER';
+
+                // Show preview panel + submit panel
+                previewPanel.classList.add('visible');
+                dropZone.style.display = 'none';
+                previewBtn.disabled = false;
+                submitPanel.style.display = '';
+                submitPanel.classList.add('fade-up');
+                scanBtn.disabled = true;  // Must preview first
+                preprocessedImageB64 = null;
+
+                // Reset downstream
+                pipelinePanel.classList.remove('visible');
+                resultWrapper.classList.remove('visible');
+                step1Badge.textContent = '1';
+                step1Badge.classList.remove('done');
+                step2Badge.textContent = '2';
+                step2Badge.classList.remove('done');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ── Change Image ─────────────────────────────────
+        changeImgBtn.addEventListener('click', () => {
+            selectedFile = null;
+            preprocessedImageB64 = null;
+            originalImageB64 = null;
+            dropZone.style.display = '';
+            previewPanel.classList.remove('visible');
+            submitPanel.style.display = 'none';
+            pipelinePanel.classList.remove('visible');
+            resultWrapper.classList.remove('visible');
+            previewBtn.disabled = true;
+            scanBtn.disabled = true;
+            fileName.textContent = 'Click or Drag Image Here';
+            fileInput.value = '';
+        });
+
+        // ── Preview Preprocessing ────────────────────────
+        previewBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            previewBtn.disabled = true;
+            previewBtn.innerHTML = 'Processing... ⏳';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('apply_opencv', preprocessChk.checked);
+
+                const resp = await fetch('/api/v1/ocr/preprocess', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!resp.ok) throw new Error('API Error: ' + resp.statusText);
+
+                const data = await resp.json();
+
+                if (data.success) {
+                    originalPreview.src = data.original_preview;
+                    processedPreview.src = data.processed_preview;
+                    preprocessedImageB64 = data.processed_preview;
+                    processedBadge.textContent = data.opencv_applied ? 'OPENCV' : 'NO FILTER';
+
+                    // Enable submit
+                    scanBtn.disabled = false;
+                    step1Badge.textContent = '✓';
+                    step1Badge.classList.add('done');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Preview failed: ' + err.message);
+            } finally {
+                previewBtn.disabled = false;
+                previewBtn.innerHTML = 'Preview Preprocessing 👁️';
+            }
+        });
+
+        // ── Submit to OCR ────────────────────────────────
+        scanBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            scanBtn.disabled = true;
+            scanBtn.innerHTML = 'Processing... ⏳';
+            pipelinePanel.classList.add('visible');
+            resultWrapper.classList.remove('visible');
+            jsonOutput.classList.remove('show');
+            resetTimeline();
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('lang', 'id');
+
+            // Send the preprocessed image if available
+            if (preprocessedImageB64) {
+                formData.append('preprocessed_image', preprocessedImageB64);
+            } else {
+                formData.append('preprocess', preprocessChk.checked);
+            }
+
+            try {
+                const response = await fetch('/api/v1/ocr/scan_stream', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('API Error: ' + response.statusText);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const payload = JSON.parse(line.substring(6));
+
+                            if (payload.status === 'uploading') {
+                                updateStep('uploading', 'active', payload.message);
+                            }
+                            else if (payload.status === 'preprocessing') {
+                                updateStep('uploading', 'done');
+                                // Preprocessing already done, just skip
+                            }
+                            else if (payload.status === 'ocr') {
+                                updateStep('uploading', 'done');
+                                updateStep('ocr', 'active', payload.message);
+                            }
+                            else if (payload.status === 'classification') {
+                                updateStep('ocr', 'done');
+                                updateStep('classification', 'active', payload.message);
+                            }
+                            else if (payload.status === 'llm') {
+                                updateStep('classification', 'done');
+                                updateStep('llm', 'active', payload.message);
+                            }
+                            else if (payload.status === 'complete') {
+                                updateStep('llm', 'done');
+                                step2Badge.textContent = '✓';
+                                step2Badge.classList.add('done');
+                                pipelinePanel.classList.remove('visible');
+                                resultWrapper.classList.add('visible');
+
+                                setTimeout(() => {
+                                    jsonOutput.textContent = JSON.stringify(payload.result.data, null, 2);
+                                    jsonOutput.classList.add('show');
+                                }, 100);
+                            }
+                            else if (payload.status === 'error') {
+                                updateStep('llm', 'active', "ERROR: " + payload.message);
+                                alert("Error during scan: " + payload.message);
+                            }
+                        } catch (e) {
+                            console.error('Parse err', e, line);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Failed to connect to server: " + err.message);
+            } finally {
+                scanBtn.disabled = false;
+                scanBtn.innerHTML = 'Submit to OCR ✨';
+            }
+        });
+
+        // ── Helpers ──────────────────────────────────────
+        function updateStep(id, state, descOverride = null) {
+            const step = document.getElementById(`step-${id}`);
+            if (!step) return;
+            step.className = 'step';
+            if (state) step.classList.add(state);
+            if (descOverride) {
+                const desc = step.querySelector('.step-desc');
+                if (desc) desc.textContent = descOverride;
+            }
+            if (state === 'done') {
+                step.querySelector('.step-icon').innerHTML = '✓';
+            }
+        }
+
+        function resetTimeline() {
+            ['uploading', 'ocr', 'classification', 'llm'].forEach((id, idx) => {
+                const step = document.getElementById(`step-${id}`);
+                step.className = 'step';
+                step.querySelector('.step-icon').innerHTML = idx + 1;
+            });
+        }
+    </script>
+</body>
+</html>

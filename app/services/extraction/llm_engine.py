@@ -40,23 +40,47 @@ class LLMExtractionEngine(ExtractionStrategy):
     Prompt construction is fully driven by document JSON templates.
     To support a new document format, add a new template file to
     app/core/templates/ with the llm_* fields populated.
+
+    Template content is RAG-filtered so only rules/schema relevant
+    to the current OCR text appear in the prompt, reducing token
+    usage and confusion for small local LLMs.
     """
 
     def __init__(self):
         self._llm = None
+        self._embed_model = None
+        self._template_rag = None
         self._is_loaded = False
 
     def initialize(self):
         """Load the model into memory. Downloads from HF if missing."""
         if not self._is_loaded:
+            from app.core.config import BASE_DIR
+            
+            # Set cache for sentence-transformers to bypass quota
+            os.environ["SENTENCE_TRANSFORMERS_HOME"] = str(BASE_DIR / ".venv" / "tmp")
+            
+            # Load embedding model
+            try:
+                from sentence_transformers import SentenceTransformer
+                logger.info(f"Loading embedding model: {settings.embedding_model_name}")
+                self._embed_model = SentenceTransformer(settings.embedding_model_name)
+
+                # Initialize template RAG store with the embedding model
+                from app.services.extraction.template_rag import TemplateRAGStore
+                self._template_rag = TemplateRAGStore(self._embed_model)
+                logger.info("Template RAG store initialized.")
+            except Exception as e:
+                logger.error(f"Failed to load sentence-transformers: {e}")
+
             model_path = settings.llm_model_path
             
             # Ensure directory exists
             os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
             if not os.path.exists(model_path):
-                repo_id = os.getenv("LLM_MODEL_REPO", "Qwen/Qwen2.5-0.5B-Instruct-GGUF")
-                filename = os.getenv("LLM_MODEL_FILE", "qwen2.5-0.5b-instruct-q4_k_m.gguf")
+                repo_id = os.getenv("LLM_MODEL_REPO", "Qwen/Qwen2.5-1.5B-Instruct-GGUF")
+                filename = os.getenv("LLM_MODEL_FILE", "qwen2.5-1.5b-instruct-q4_k_m.gguf")
                 
                 logger.info(f"LLM model not found at {model_path}. Attempting to download {filename} from {repo_id}...")
                 try:
@@ -140,26 +164,62 @@ class LLMExtractionEngine(ExtractionStrategy):
         # 2. Retrieve template (passed from OCRService after classification)
         template: Dict[str, Any] = kwargs.get("template") or {}
         doc_type: str = template.get("doc_type", "document")
+        
+        # 3. Apply RAG filtering via turbovec if we have many lines
+        if len(raw_text_lines) > 15 and self._embed_model:
+            try:
+                from turbovec import TurboQuantIndex
+                import numpy as np
+                
+                logger.info(f"Applying turbovec RAG on {len(raw_text_lines)} lines")
+                vectors = self._embed_model.encode(raw_text_lines)
+                
+                index = TurboQuantIndex(dim=vectors.shape[1], bit_width=4)
+                index.add(vectors)
+                
+                # Query optimized for KK fields (turbovec expects 2D array)
+                query_text = "kartu keluarga NIK nama lengkap jenis kelamin tempat tanggal lahir agama pendidikan pekerjaan status perkawinan kewarganegaraan nama ayah ibu alamat RT RW desa kelurahan kecamatan kabupaten kota provinsi"
+                query_vector = self._embed_model.encode([query_text])
+                
+                # Retrieve top 25 lines
+                top_k = min(25, len(raw_text_lines))
+                scores, indices = index.search(query_vector, k=top_k)
+                
+                # Reconstruct keeping original order (indices is 2D, we take the first row)
+                retrieved_indices = sorted(list(indices[0]))
+                rag_filtered_lines = [raw_text_lines[i] for i in retrieved_indices]
+                
+                logger.info(f"RAG filtered from {len(raw_text_lines)} to {len(rag_filtered_lines)} lines")
+                raw_text_lines = rag_filtered_lines
+            except Exception as e:
+                logger.error(f"RAG turbovec failed: {e}")
 
-        # 3. Pre-filter noise labels from OCR text BEFORE sending to LLM
-        #    This is more reliable than asking the model to ignore them.
+        # 4. Pre-filter noise labels from OCR text BEFORE sending to LLM
         noise_labels: List[str] = template.get("llm_noise_labels", [])
         raw_text = self._filter_noise(raw_text_lines, noise_labels)
 
         logger.info(f"OCR text after noise filtering ({len(raw_text)} chars):\n{raw_text}")
 
-        # 4. Build template-driven prompt
+        # 5. RAG-filter the template — only include rules/schema relevant to the OCR text
+        if self._template_rag and template:
+            mini_template = self._template_rag.retrieve(template, raw_text)
+            # Preserve noise_labels (used in pre-filtering, already applied above)
+            if "llm_noise_labels" not in mini_template and "llm_noise_labels" in template:
+                mini_template["llm_noise_labels"] = template["llm_noise_labels"]
+            template = mini_template
+
+        # 6. Build template-driven prompt
         prompt = self._build_prompt(raw_text, template)
         logger.info(f"Sending prompt to LLM ({len(prompt)} chars)...")
 
-        # 5. Inference with timing
+        # 7. Inference with timing
         output_text = ""
         t_start = time.perf_counter()
 
         try:
             response = self._llm(
                 prompt,
-                max_tokens=450,
+                max_tokens=2048,
                 stop=["<|im_end|>"],
                 temperature=0.05,
                 top_p=0.9,
@@ -252,10 +312,22 @@ class LLMExtractionEngine(ExtractionStrategy):
 
         schema_hint = ""
         if output_schema:
+            # Compact schema: list key names per section instead of full JSON dump.
+            # This saves ~50-100 tokens vs json.dumps while preserving clarity.
+            header_keys = [k for k, v in output_schema.items() if not isinstance(v, list)]
+            schema_parts = []
+            if header_keys:
+                schema_parts.append("Header: " + ", ".join(header_keys))
+
+            for k, v in output_schema.items():
+                if isinstance(v, list) and v and isinstance(v[0], dict):
+                    item_keys = list(v[0].keys())
+                    schema_parts.append(f"Array '{k}' items: " + ", ".join(item_keys))
+
             schema_hint = (
-                "\nCRITICAL: You MUST output a JSON object using EXACTLY these keys. DO NOT invent keys. DO NOT use Indonesian labels as keys. Use these EXACT English keys:\n"
-                + json.dumps({"document_type": template.get("doc_type", "document"), "entities": output_schema},
-                              ensure_ascii=False)
+                "\nCRITICAL: You MUST output a JSON object using EXACTLY these keys. "
+                "DO NOT invent keys. DO NOT use Indonesian labels as keys. "
+                f"Use these EXACT English keys:\n{'; '.join(schema_parts)}"
             )
 
         few_shot_text = ""

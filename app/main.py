@@ -158,6 +158,16 @@ MIT License - Free to use, modify, and distribute.
         tags=["ocr"],
     )
 
+    from fastapi.staticfiles import StaticFiles
+    import os
+    from app.core.config import BASE_DIR
+    
+    static_dir = os.path.join(BASE_DIR, "static")
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir, exist_ok=True)
+        
+    app.mount("/demo", StaticFiles(directory=static_dir, html=True), name="static")
+
     # Root endpoint
     @app.get("/", include_in_schema=False)
     async def root() -> dict:

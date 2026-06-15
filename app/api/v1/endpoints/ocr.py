@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, File, Form, UploadFile, status
 from fastapi.responses import Response
+from PIL import Image
 
 from app.core.config import get_settings
 from app.core.exceptions import SnapTextException
@@ -112,6 +113,193 @@ async def scan_document(
             details={"filename": file.filename},
 
         ) from e
+
+
+@router.post(
+    "/preprocess",
+    summary="Preview OpenCV Preprocessing",
+    description="Upload an image, apply optional OpenCV preprocessing, and return both original and processed images as base64 for side-by-side review.",
+)
+async def preprocess_image(
+    file: UploadFile = File(..., description="Image file to preprocess"),
+    apply_opencv: bool = Form(default=True, description="Apply OpenCV Grayscale + Adaptive Thresholding"),
+):
+    """Preview preprocessing result before submitting to OCR.
+
+    Returns:
+        Dict with original_preview and processed_preview as base64 data URIs.
+    """
+    import base64
+    import io
+
+    ocr_service = get_ocr_service()
+
+    try:
+        file_content = await file.read()
+        filename = file.filename or "unknown"
+
+        # Validate and load
+        image = await ocr_service._image_handler.validate_and_load(file_content, filename)
+
+        # Encode original as base64
+        orig_buffer = io.BytesIO()
+        image.save(orig_buffer, format="JPEG", quality=90)
+        original_b64 = f"data:image/jpeg;base64,{base64.b64encode(orig_buffer.getvalue()).decode('utf-8')}"
+
+        # Apply preprocessing if requested
+        if apply_opencv:
+            processed = ocr_service._image_handler.apply_preprocessing(image)
+        else:
+            processed = image.copy()
+
+        # Encode processed as base64
+        proc_buffer = io.BytesIO()
+        processed.save(proc_buffer, format="JPEG", quality=90)
+        processed_b64 = f"data:image/jpeg;base64,{base64.b64encode(proc_buffer.getvalue()).decode('utf-8')}"
+
+        return {
+            "success": True,
+            "original_preview": original_b64,
+            "processed_preview": processed_b64,
+            "opencv_applied": apply_opencv,
+        }
+
+    except SnapTextException:
+        raise
+    except Exception as e:
+        from app.core.exceptions import OCRError
+        raise OCRError(
+            message=f"Error during preprocessing: {str(e)}",
+            details={"filename": file.filename},
+        ) from e
+
+
+@router.post(
+    "/scan_stream",
+    summary="Scan Document with SSE Progress Streaming",
+    description="Extract data and stream progress updates (Server-Sent Events). Accepts an optional preprocessed base64 image to skip the preprocessing step.",
+)
+async def scan_document_stream(
+    file: UploadFile = File(..., description="Image file of Document to process"),
+    lang: str = Form(default="id"),
+    preprocess: bool = Form(default=False, description="Apply OpenCV Table Preprocessing (ignored if preprocessed_image is provided)"),
+    preprocessed_image: Optional[str] = Form(default=None, description="Base64-encoded preprocessed image (data URI). If provided, preprocessing step is skipped."),
+):
+    import json
+    import asyncio
+    import base64
+    import io
+    from fastapi.responses import StreamingResponse
+    from app.services.ocr_service import get_ocr_service
+    from app.core.templates import get_templates
+
+    # Read file synchronously in the request context before StreamingResponse is returned
+    file_content = await file.read()
+    filename = file.filename or "unknown"
+
+    async def event_generator():
+        start_time = time.time()
+        ocr_service = get_ocr_service()
+
+        try:
+            # 1. Load image
+            yield f"data: {json.dumps({'status': 'uploading', 'message': 'Membaca file gambar...'})}\n\n"
+
+            if preprocessed_image:
+                # Decode the base64 preprocessed image provided by the frontend
+                # Strip data URI prefix if present
+                b64_data = preprocessed_image
+                if "," in b64_data:
+                    b64_data = b64_data.split(",", 1)[1]
+
+                img_bytes = base64.b64decode(b64_data)
+                image = Image.open(io.BytesIO(img_bytes))
+                if image.mode not in ("RGB", "RGBA"):
+                    image = image.convert("RGB")
+
+                yield f"data: {json.dumps({'status': 'preprocessing', 'message': 'Menggunakan gambar yang sudah di-preprocess.'})}\n\n"
+            else:
+                image = await ocr_service._image_handler.validate_and_load(file_content, filename)
+
+                # 2. Preprocessing (only if no preprocessed image was provided)
+                if preprocess:
+                    image = ocr_service._image_handler.apply_preprocessing(image)
+
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="JPEG", quality=85)
+                    base64_img = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+                    yield f"data: {json.dumps({'status': 'preprocessing', 'message': 'OpenCV Grayscale & Adaptive Thresholding Selesai.', 'processed_image': f'data:image/jpeg;base64,{base64_img}'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'status': 'preprocessing', 'message': 'Bypass Preprocessing...'})}\n\n"
+
+            await asyncio.sleep(0.5)
+
+            # 3. OCR
+            yield f"data: {json.dumps({'status': 'ocr', 'message': 'Menjalankan RapidOCR (Mengekstrak teks mentah)...'})}\n\n"
+            ocr_result = await ocr_service._repository.extract_text(image, lang)
+            regions = ocr_result.get("regions", [])
+            ocr_time = ocr_result.get("processing_time_ms", 0)
+
+            # 4. Classification
+            yield f"data: {json.dumps({'status': 'classification', 'message': 'Mengklasifikasi jenis dokumen...'})}\n\n"
+            from app.services.extraction.base import ExtractionStrategy
+            ExtractionStrategy.augment_spatial_metadata(regions)
+            templates = get_templates()
+            doc_type = ocr_service.classify_document(regions, templates)
+            template = templates.get(doc_type) if doc_type else {}
+            if template and doc_type:
+                template = {**template, "doc_type": doc_type}
+
+            # 5. Extraction
+            if ocr_service._llm_engine and settings.llm_enabled:
+                yield f"data: {json.dumps({'status': 'llm', 'message': f'Menggunakan Qwen 1.5B untuk structuring JSON ({doc_type})...'})}\n\n"
+                mapped_data = await asyncio.to_thread(
+                    ocr_service._llm_engine.extract, regions, [], template=template
+                )
+            else:
+                yield f"data: {json.dumps({'status': 'llm', 'message': f'Menggunakan Spatial Engine...'})}\n\n"
+                mapped_data = ocr_service._spatial_engine.extract(regions, [], template=template)
+
+            mapped_data = ocr_service._post_process_data(mapped_data)
+
+            # Metadata injection
+            mapped_data["_ocr_time_ms"] = ocr_time
+            if doc_type:
+                mapped_data.setdefault("_document_type", doc_type)
+
+            doc_type = mapped_data.pop("_document_type", "unknown")
+            llm_stats_raw = mapped_data.pop("_llm_stats", None)
+            ocr_time = mapped_data.pop("_ocr_time_ms", 0)
+
+            llm_perf = None
+            llm_time = 0
+            if llm_stats_raw and isinstance(llm_stats_raw, dict):
+                try:
+                    if "provider" not in llm_stats_raw:
+                        llm_stats_raw["provider"] = settings.llm_provider
+                    llm_perf = llm_stats_raw
+                    llm_time = llm_stats_raw.get("elapsed_seconds", 0) * 1000
+                except Exception:
+                    pass
+
+            processing_time = (time.time() - start_time) * 1000
+
+            final_result = {
+                "success": True,
+                "data": mapped_data,
+                "document_type": doc_type,
+                "processing_time_ms": processing_time,
+                "ocr_time_ms": ocr_time,
+                "llm_time_ms": llm_time,
+                "llm_performance": llm_perf,
+            }
+            yield f"data: {json.dumps({'status': 'complete', 'message': 'Selesai!', 'result': final_result})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post(

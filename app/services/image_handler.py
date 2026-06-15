@@ -63,6 +63,41 @@ class ImageHandler:
                 details={"size_bytes": file_size, "extension": file_ext},
             ) from e
 
+    def apply_preprocessing(self, image: Image.Image) -> Image.Image:
+        """Apply OpenCV adaptive thresholding for table documents.
+        
+        This converts the image to grayscale, applies a light Gaussian blur,
+        and then an adaptive threshold to make small text in tables pop out clearly.
+        """
+        import cv2
+        import numpy as np
+        
+        # Convert PIL to OpenCV format
+        img_array = np.array(image)
+        if image.mode == 'RGBA':
+            img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+        else:
+            img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+            
+        # 1. Grayscale
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+        
+        # 2. Gentle Denoising (Gaussian Blur)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        
+        # 3. Adaptive Thresholding (Optimized for Paper Documents)
+        processed_img = cv2.adaptiveThreshold(
+            blurred, 255, 
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            cv2.THRESH_BINARY, 
+            21, 5
+        )
+        
+        # Convert back to PIL
+        # Convert single channel grayscale back to RGB so it works with the rest of the pipeline seamlessly
+        processed_rgb = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2RGB)
+        return Image.fromarray(processed_rgb)
+
     @staticmethod
     def _get_file_extension(filename: str) -> str:
         parts = filename.rsplit(".", 1)

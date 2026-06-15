@@ -10,7 +10,10 @@ class ExtractionStrategy(ABC):
     def augment_spatial_metadata(regions: List[Dict[str, Any]]) -> None:
         """Add centroid and dimensional metadata to OCR regions."""
         for r in regions:
-            bbox = r["bbox"]
+            bbox = r.get("bbox")
+            if not bbox:
+                r.update({"_min_x": 0, "_max_x": 0, "_min_y": 0, "_max_y": 0, "_center_x": 0, "_center_y": 0, "_height": 0, "_width": 0})
+                continue
             xs = [p[0] for p in bbox]
             ys = [p[1] for p in bbox]
             r["_min_x"], r["_max_x"] = min(xs), max(xs)

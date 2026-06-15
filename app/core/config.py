@@ -60,10 +60,11 @@ class Settings(BaseSettings):
     # LLM Configuration
     llm_enabled: bool = Field(default=True, alias="LLM_ENABLED")
     llm_model_path: str = Field(
-        default=str(BASE_DIR / "models" / "qwen2.5-0.5b-instruct-q4_k_m.gguf"),
+        default=str(BASE_DIR / "models" / "qwen2.5-1.5b-instruct-q4_k_m.gguf"),
         alias="LLM_MODEL_PATH"
     )
-    llm_n_ctx: int = Field(default=2048, alias="LLM_N_CTX")  # 2048 is the sweet spot for KTP + rules
+    llm_n_ctx: int = Field(default=4096, alias="LLM_N_CTX")  # 4096 is safer for KTP + Kartu Keluarga
+    embedding_model_name: str = Field(default="all-MiniLM-L6-v2", alias="EMBEDDING_MODEL_NAME")
 
     # Upload Configuration
     max_upload_size_mb: int = Field(default=10, alias="MAX_UPLOAD_SIZE_MB")

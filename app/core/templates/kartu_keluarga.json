@@ -1,0 +1,64 @@
+{
+  "name": "Kartu Keluarga",
+  "doc_type": "kartu_keluarga",
+  "anchors": ["kartu keluarga", "kepala keluarga", "nama lengkap", "jenis pekerjaan"],
+  "keywords": ["kartu keluarga", "kepala keluarga", "anggota keluarga", "nama orang tua"],
+  "llm_field_rules": [
+    "nomor_kk: 16-digit numeric ID (Nomor Kartu Keluarga). NEVER a person name.",
+    "nama_kepala_keluarga: Person name in ALL CAPS from the 'Kepala Keluarga' field.",
+    "alamat: Full street address string.",
+    "rt_rw: Two 3-digit numbers separated by a slash (e.g. 003/005). If OCR merged them, add the slash.",
+    "desa_kelurahan: Village or kelurahan name.",
+    "kecamatan: District (kecamatan) name.",
+    "kabupaten_kota: City or regency name (e.g. Jakarta Timur, Kabupaten Bogor).",
+    "kode_pos: 5-digit postal code NUMBER ONLY. NEVER a province or city name. Set null if no 5-digit number is found.",
+    "provinsi: Province name (e.g. DKI Jakarta, Jawa Barat, Jawa Tengah). NEVER a postal code.",
+    "Extract ALL family members listed in the table into the 'anggota_keluarga' array. Group the details of the same person together into a single object. The OCR text may have column data mixed up, so infer the rows logically.",
+    "For each family member, extract: nama_lengkap, nik, jenis_kelamin, tempat_lahir, tanggal_lahir, agama, pendidikan, jenis_pekerjaan, status_perkawinan, status_hubungan, kewarganegaraan, nama_ayah, nama_ibu.",
+    "nik: 16-digit numeric ID for each family member. NEVER a person name.",
+    "jenis_kelamin: LAKI-LAKI or PEREMPUAN.",
+    "tempat_lahir: City/regency name ONLY. Remove any trailing garbage characters like +, .<, !, ,、, or other OCR artifacts.",
+    "tanggal_lahir: Date in DD-MM-YYYY format.",
+    "agama: Religion name (e.g. ISLAM, KRISTEN, KATOLIK, HINDU, BUDDHA, KONGHUCU).",
+    "pendidikan: Education level (e.g. SD, SMP, SMA, D3, S1, S2, S3).",
+    "jenis_pekerjaan: Occupation (e.g. KARYAWAN SWASTA, PEGAWAI NEGERI, RUMAH TANGGA, PELAJAR/MAHASISWA).",
+    "status_perkawinan: Marital status (e.g. KAWIN, BELUM KAWIN, CERAI HIDUP, CERAI MATI).",
+    "status_hubungan: Family relation (e.g. KEPALA KELUARGA, ISTRI, ANAK).",
+    "kewarganegaraan: Must be WNI or a country name. NEVER a religion like ISLAM or KRISTEN.",
+    "nama_ayah: Father's name in ALL CAPS.",
+    "nama_ibu: Mother's name in ALL CAPS.",
+    "CRITICAL: Preserve spaces between words in Names and Addresses (e.g. 'MIRA SETIAWAN' not 'MIRASETIAWAN').",
+    "Use null if a field is empty or marked with a dash (-)."
+  ],
+  "llm_noise_labels": [
+    "(1)", "(2)", "(3)", "(4)", "(5)", "(6)", "(7)", "(8)", "(9)", "(10)", "(11)", "(12)", "(13)", "(14)", "(15)", "Jenis Kelamin", "Tempat Lahir", "Tanggal Lahir", "Agama", "Pendidikan", "Jenis Pekerjaan", "Status Perkawinan", "Status Hubungan Dalam Keluarga", "Kewarganegaraan", "No. Paspor", "No. KITAS/KITAP", "Ayah", "Ibu"
+  ],
+  "llm_output_schema": {
+    "nomor_kk": "string",
+    "nama_kepala_keluarga": "string",
+    "alamat": "string",
+    "rt_rw": "string",
+    "desa_kelurahan": "string",
+    "kecamatan": "string",
+    "kabupaten_kota": "string",
+    "kode_pos": "string",
+    "provinsi": "string",
+    "anggota_keluarga": [
+      {
+        "nama_lengkap": "string",
+        "nik": "string",
+        "jenis_kelamin": "string",
+        "tempat_lahir": "string",
+        "tanggal_lahir": "string",
+        "agama": "string",
+        "pendidikan": "string",
+        "jenis_pekerjaan": "string",
+        "status_perkawinan": "string",
+        "status_hubungan": "string",
+        "kewarganegaraan": "string",
+        "nama_ayah": "string",
+        "nama_ibu": "string"
+      }
+    ]
+  }
+}

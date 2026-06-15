@@ -43,6 +43,7 @@ class OCRService:
         filename: str,
         fields: Optional[List[str]] = None,
         lang: str = "id",
+        preprocess: bool = False,
     ) -> Dict[str, Any]:
         """Orchestrate the OCR and extraction pipeline.
 
@@ -51,9 +52,15 @@ class OCRService:
             filename: Original filename
             fields: Specific fields to extract
             lang: OCR language
+            preprocess: Whether to apply OpenCV table preprocessing
         """
-        # 1. Validate and load image once (no preprocessing)
+        # 1. Validate and load image
         image = await self._image_handler.validate_and_load(file_content, filename)
+        
+        # Apply OpenCV pre-processing if requested
+        if preprocess:
+            logger.info("Applying OpenCV table pre-processing to image...")
+            image = self._image_handler.apply_preprocessing(image)
 
         # 2. OCR Extraction
         ocr_result = await self._repository.extract_text(image, lang)
